@@ -106,7 +106,7 @@ namespace Cmas.Services.Requests
             {
                 var createRequestDto = this.Bind<CreateRequestDto>();
 
-                string requestId = await _requestsBusinessLayer.CreateRequest(createRequestDto.ContractId, createRequestDto.CallOffsOrdersIds);
+                string requestId = await _requestsBusinessLayer.CreateRequest(createRequestDto.ContractId, createRequestDto.CallOffOrderIds);
 
                 CmasRequests.Request request = await _requestsBusinessLayer.GetRequest(requestId);
 

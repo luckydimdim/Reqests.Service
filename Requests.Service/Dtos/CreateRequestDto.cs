@@ -6,11 +6,11 @@ namespace Cmas.Services.Requests.Dtos
     {
         public string ContractId;
 
-        public IList<string> CallOffsOrdersIds;
+        public IList<string> CallOffOrderIds;
 
         public CreateRequestDto()
         {
-            CallOffsOrdersIds = new List<string>();
+            CallOffOrderIds = new List<string>();
         }
     }
 }
