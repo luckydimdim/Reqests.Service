@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp1.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Autofac" Version="4.4.0" />
+    <PackageReference Include="Autofac.Extensions.DependencyInjection" Version="4.0.0" />
+    <PackageReference Include="Cmas.DataLayers.CouchDb.CallOffOrders" Version="*" />
+    <PackageReference Include="Cmas.DataLayers.CouchDb.Contracts" Version="*" />
+    <PackageReference Include="Cmas.Infrastructure.Domain" Version="*" />
+    <PackageReference Include="Cmas.DataLayers.CouchDb.Requests" Version="*" />
+    <PackageReference Include="Cmas.Infrastructure.ServicesStartup" Version="*" />
+    <PackageReference Include="Microsoft.AspNetCore" Version="1.1.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Owin" Version="1.1.1" />
+    <PackageReference Include="Nancy" Version="2.0.0-clinteastwood" />
+    <PackageReference Include="Nancy.Bootstrappers.Autofac" Version="2.0.0-clinteastwood" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Requests.Service\Requests.Service.csproj" />
+  </ItemGroup>
+
+</Project>
