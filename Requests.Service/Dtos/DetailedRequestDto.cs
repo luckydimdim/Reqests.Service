@@ -79,6 +79,11 @@ namespace Cmas.Services.Requests.Dtos
         public DateTime UpdatedAt;
 
         /// <summary>
+        /// Идентификаторы наряд заказов
+        /// </summary>
+        public IEnumerable<string> CallOffOrderIds;
+
+        /// <summary>
         /// Документация
         /// </summary>
         public IEnumerable<DocumentDto> Documents;
