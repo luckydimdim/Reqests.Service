@@ -52,6 +52,48 @@ namespace Cmas.Services.Requests
             return result;
         }
 
+        private async Task<DetailedRequestDto>  GetDetailedRequest(string requestId)
+        {
+            CmasRequests.Request request = await _requestsBusinessLayer.GetRequest(requestId);
+
+            return await GetDetailedRequest(request);
+        }
+
+        private async Task<DetailedRequestDto> GetDetailedRequest(CmasRequests.Request request)
+        {
+            DetailedRequestDto result = _autoMapper.Map<DetailedRequestDto>(request);
+
+            result.Documents = await CreateTimeSheets(request.CallOffOrderIds);
+
+            result.Summary.WorksQuantity = request.CallOffOrderIds.Count;
+
+            return result;
+        }
+
+        private async Task<SimpleRequestDto> GetSimpleRequest(CmasRequests.Request request)
+        {
+            var result = _autoMapper.Map<SimpleRequestDto>(request);
+
+            var contract = await _contractBusinessLayer.GetContract(result.ContractId);
+            result.ContractNumber = contract.Number;
+            result.ContractorName = contract.ContractorName;
+
+            return result;
+        }
+
+        private async Task<IEnumerable<SimpleRequestDto>> GetSimpleRequests(IEnumerable<CmasRequests.Request> requests)
+        {
+            var result = new List<SimpleRequestDto>();
+
+            foreach (var request in requests)
+            {
+                var simpleRequest = await GetSimpleRequest(request);
+                result.Add(simpleRequest);
+            }
+
+            return result;
+        }
+
         public RequestsModule(ICommandBuilder commandBuilder, IQueryBuilder queryBuilder, IMapper autoMapper) : base("/requests")
         {
             _autoMapper = autoMapper;
@@ -70,71 +112,69 @@ namespace Cmas.Services.Requests
             {
                 string contractId = Request.Query["contractId"];
 
+                IEnumerable<CmasRequests.Request> requests = null;
+
                 if (contractId == null)
                 {
-                    var result = new List<SimpleRequestDto>();
-
-                    var requests = await _requestsBusinessLayer.GetRequests();
-
-                    foreach (var request in requests)
-                    {
-                        var simpleRequest = _autoMapper.Map<SimpleRequestDto>(request);
-
-                        var contract = await _contractBusinessLayer.GetContract(simpleRequest.ContractId);
-                        simpleRequest.ContractNumber = contract.Number;
-                        simpleRequest.ContractorName = contract.ContractorName;
-                        result.Add(simpleRequest);
-                    }
-
-                    return result;
+                    requests = await _requestsBusinessLayer.GetRequests();
                 }
                 else
                 {
-                    return await _requestsBusinessLayer.GetRequestsByContractId(contractId);
+                    requests = await _requestsBusinessLayer.GetRequestsByContractId(contractId);
                 }
+
+                return await GetSimpleRequests(requests);
             });
 
             /// <summary>
             /// /requests/{id} - получить заявку по указанному ID
             /// </summary>
-            Get("/{id}", async args => await _requestsBusinessLayer.GetRequest(args.id));
+            /// <return>DetailedRequestDto</return>
+            Get("/{id}", async args =>
+            {
+                return await GetDetailedRequest(args.id);
+            });
 
             /// <summary>
             /// Создать заявку
             /// </summary>
+            /// <return>DetailedRequestDto</return>
             Post("/", async (args, ct) =>
             {
                 var createRequestDto = this.Bind<CreateRequestDto>();
 
                 string requestId = await _requestsBusinessLayer.CreateRequest(createRequestDto.ContractId, createRequestDto.CallOffOrderIds);
 
-                CmasRequests.Request request = await _requestsBusinessLayer.GetRequest(requestId);
-
-                DetailedRequestDto result = _autoMapper.Map<DetailedRequestDto>(request);
-
-                result.Documents = await CreateTimeSheets(request.CallOffOrderIds);
-
-                result.Summary.WorksQuantity = request.CallOffOrderIds.Count;
-
-                return result;
+                return await GetDetailedRequest(requestId);
             });
 
-            Put("/{id}",  (args, ct) =>
+            /// <summary>
+            /// Обновить заявку
+            /// На входе массив идентификаторов наряд заказов
+            /// </summary>
+            /// <return>DetailedRequestDto</return>
+            Put("/{id}",  async (args, ct) =>
             {
-                var callOffsIds = this.Bind<List<string>>();
+                var ids = this.Bind<List<string>>();
+                 
+                CmasRequests.Request request = await _requestsBusinessLayer.GetRequest(args.id);
 
-                throw new NotImplementedException("TODO: обновление заявки не реализовано");
+                request.CallOffOrderIds = ids;
+
+                await _requestsBusinessLayer.UpdateRequest(request);
+
+                return await GetDetailedRequest(request);
             });
 
             /// <summary>
             /// Удалить заявку
             /// </summary>
+            /// <return>ID заявки</return>
             Delete("/{id}", async args =>
             {
                 return await _requestsBusinessLayer.DeleteRequest(args.id);
             });
         }
-
 
     }
 }

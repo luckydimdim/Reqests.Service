@@ -4,7 +4,7 @@ namespace Cmas.Services.Requests.Dtos
 {
     public class TimeSheetDto : DocumentDto
     {
-        public override string DocType {
+        public override string Type {
             get
             {
                 return "timesheet";
@@ -40,5 +40,15 @@ namespace Cmas.Services.Requests.Dtos
         /// Должность
         /// </summary>
         public string Position;
+
+        /// <summary>
+        /// Имя статуса для показа
+        /// </summary>
+        public string StatusName = "Не заполнен";
+
+        /// <summary>
+        /// Системное имя статуса
+        /// </summary>
+        public string StatusSysName = "NotFilled";
     }
 }

@@ -88,6 +88,16 @@ namespace Cmas.Services.Requests.Dtos
         /// </summary>
         public SummaryDto Summary;
 
+        /// <summary>
+        /// Имя статуса для показа
+        /// </summary>
+        public string StatusName = "Черновик";
+
+        /// <summary>
+        /// Системное имя статуса
+        /// </summary>
+        public string StatusSysName = "Draft";
+
         public DetailedRequestDto()
         {
             Documents = new List<DocumentDto>();

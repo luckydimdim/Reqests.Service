@@ -2,7 +2,7 @@
 {
     public class DocumentDto
     {
-        public virtual string DocType
+        public virtual string Type
         {
             get
             {
