@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Nancy.Extensions;
 using Cmas.BusinessLayers.CallOffOrders;
 using Cmas.BusinessLayers.Requests;
 using CmasRequests = Cmas.BusinessLayers.Requests.Entities;
@@ -11,6 +12,8 @@ using Cmas.Services.Requests.Dtos;
 using AutoMapper;
 using System.Threading.Tasks;
 using Cmas.BusinessLayers.Contracts;
+using Cmas.BusinessLayers.Requests.Entities;
+using Nancy.IO;
 
 namespace Cmas.Services.Requests
 {
@@ -23,6 +26,27 @@ namespace Cmas.Services.Requests
         private readonly CallOffOrdersBusinessLayer _callOffOrdersBusinessLayer;
         private readonly ContractBusinessLayer _contractBusinessLayer;
         private readonly IMapper _autoMapper;
+
+        /// <summary>
+        /// Получить название статуса.
+        /// TODO: Перенести в класс - локализатор
+        /// </summary>
+        private string GetStatusName(RequestStatus status)
+        {
+            switch (status)
+            {
+                case RequestStatus.Creation:
+                    return "В процессе составления";
+                case RequestStatus.Validation:
+                    return "На проверке";
+                case RequestStatus.Correction:
+                    return "Содержит ошибки";
+                case RequestStatus.Done:
+                    return "Проверена";
+                default:
+                    return "";
+            }
+        }
 
         /// <summary>
         /// Заглушка - создание TS на каждый НЗ.Удалить после реализации сервиса работ с TS
@@ -67,6 +91,9 @@ namespace Cmas.Services.Requests
 
             result.Summary.WorksQuantity = request.CallOffOrderIds.Count;
 
+            result.StatusName = GetStatusName(request.Status);
+            result.StatusSysName = request.Status.ToString();
+
             return result;
         }
 
@@ -77,6 +104,9 @@ namespace Cmas.Services.Requests
             var contract = await _contractBusinessLayer.GetContract(result.ContractId);
             result.ContractNumber = contract.Number;
             result.ContractorName = contract.ContractorName;
+
+            result.StatusName = GetStatusName(request.Status);
+            result.StatusSysName = request.Status.ToString();
 
             return result;
         }
@@ -163,6 +193,32 @@ namespace Cmas.Services.Requests
 
                 await _requestsBusinessLayer.UpdateRequest(request);
 
+                return await GetDetailedRequest(request);
+            });
+
+            /// <summary>
+            /// Обновить заявку
+            /// На входе массив идентификаторов наряд заказов
+            /// </summary>
+            /// <return>DetailedRequestDto</return>
+            Put("{id}/status", async (args, ct) =>
+            {
+                string statusSysName = (Request.Body as RequestStream).AsString();
+
+                RequestStatus parsedStatus = RequestStatus.None;
+
+                if (!Enum.TryParse<RequestStatus>(statusSysName, ignoreCase: true, result: out parsedStatus))
+                    throw new Exception("Incorrect status");
+
+                CmasRequests.Request request = await _requestsBusinessLayer.GetRequest(args.id);
+
+                if (request.Status != parsedStatus)
+                {
+                    request.Status = parsedStatus;
+
+                    await _requestsBusinessLayer.UpdateRequest(request);
+                }
+                
                 return await GetDetailedRequest(request);
             });
 
