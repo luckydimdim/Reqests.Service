@@ -49,6 +49,6 @@ namespace Cmas.Services.Requests.Dtos
         /// <summary>
         /// Системное имя статуса
         /// </summary>
-        public string StatusSysName = "NotFilled";
+        public string StatusSysName = "Creation";
     }
 }
