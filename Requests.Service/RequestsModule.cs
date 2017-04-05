@@ -31,7 +31,7 @@ namespace Cmas.Services.Requests
         /// Получить название статуса.
         /// TODO: Перенести в класс - локализатор
         /// </summary>
-        private string GetStatusName(RequestStatus status)
+        private string GetRequestStatusName(RequestStatus status)
         {
             switch (status)
             {
@@ -68,6 +68,8 @@ namespace Cmas.Services.Requests
                 timeSheet.UpdatedAt = DateTime.Now;
                 timeSheet.Name = callOffOrder.Name;
                 timeSheet.Position = callOffOrder.Position;
+                timeSheet.StatusName = "Не заполнен";
+                timeSheet.StatusSysName = "Creation";
 
                 i++;
                 result.Add(timeSheet);
@@ -91,7 +93,7 @@ namespace Cmas.Services.Requests
 
             result.Summary.WorksQuantity = request.CallOffOrderIds.Count;
 
-            result.StatusName = GetStatusName(request.Status);
+            result.StatusName = GetRequestStatusName(request.Status);
             result.StatusSysName = request.Status.ToString();
 
             return result;
@@ -105,7 +107,7 @@ namespace Cmas.Services.Requests
             result.ContractNumber = contract.Number;
             result.ContractorName = contract.ContractorName;
 
-            result.StatusName = GetStatusName(request.Status);
+            result.StatusName = GetRequestStatusName(request.Status);
             result.StatusSysName = request.Status.ToString();
 
             return result;

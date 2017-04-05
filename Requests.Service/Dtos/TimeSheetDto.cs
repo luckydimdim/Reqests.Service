@@ -44,11 +44,11 @@ namespace Cmas.Services.Requests.Dtos
         /// <summary>
         /// Имя статуса для показа
         /// </summary>
-        public string StatusName = "Не заполнен";
+        public string StatusName;
 
         /// <summary>
         /// Системное имя статуса
         /// </summary>
-        public string StatusSysName = "Creation";
+        public string StatusSysName;
     }
 }

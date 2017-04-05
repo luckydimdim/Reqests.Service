@@ -96,12 +96,12 @@ namespace Cmas.Services.Requests.Dtos
         /// <summary>
         /// Имя статуса для показа
         /// </summary>
-        public string StatusName = "Черновик";
+        public string StatusName;
 
         /// <summary>
         /// Системное имя статуса
         /// </summary>
-        public string StatusSysName = "Draft";
+        public string StatusSysName;
 
         public DetailedRequestDto()
         {
