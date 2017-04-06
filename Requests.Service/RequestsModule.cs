@@ -64,8 +64,8 @@ namespace Cmas.Services.Requests
                 var timeSheet = new TimeSheetDto();
                 timeSheet.Id = callOffOrder.Id + "_" + i.ToString();
                 timeSheet.Assignee = callOffOrder.Assignee;
-                timeSheet.CreatedAt = DateTime.Now;
-                timeSheet.UpdatedAt = DateTime.Now;
+                timeSheet.CreatedAt = DateTime.UtcNow;
+                timeSheet.UpdatedAt = DateTime.UtcNow;
                 timeSheet.Name = callOffOrder.Name;
                 timeSheet.Position = callOffOrder.Position;
                 timeSheet.StatusName = "Не заполнен";
