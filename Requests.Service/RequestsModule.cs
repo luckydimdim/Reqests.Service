@@ -36,7 +36,7 @@ namespace Cmas.Services.Requests
             switch (status)
             {
                 case RequestStatus.Creation:
-                    return "В процессе составления";
+                    return "Не заполнено";
                 case RequestStatus.Validation:
                     return "На проверке";
                 case RequestStatus.Correction:
