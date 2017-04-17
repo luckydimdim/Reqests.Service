@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection.Metadata.Ecma335;
 using Nancy.Extensions;
 using Cmas.BusinessLayers.CallOffOrders;
 using Cmas.BusinessLayers.Requests;
@@ -14,10 +15,11 @@ using System.Threading.Tasks;
 using Cmas.BusinessLayers.Contracts;
 using Cmas.BusinessLayers.Requests.Entities;
 using Nancy.IO;
+using Cmas.Infrastructure.ErrorHandler;
+using Microsoft.Extensions.Logging;
 
 namespace Cmas.Services.Requests
 {
-
     public class RequestsModule : NancyModule
     {
         private readonly ICommandBuilder _commandBuilder;
@@ -26,6 +28,7 @@ namespace Cmas.Services.Requests
         private readonly CallOffOrdersBusinessLayer _callOffOrdersBusinessLayer;
         private readonly ContractBusinessLayer _contractBusinessLayer;
         private readonly IMapper _autoMapper;
+        private ILogger _logger;
 
         /// <summary>
         /// Получить название статуса.
@@ -78,7 +81,7 @@ namespace Cmas.Services.Requests
             return result;
         }
 
-        private async Task<DetailedRequestDto>  GetDetailedRequest(string requestId)
+        private async Task<DetailedRequestDto> GetDetailedRequest(string requestId)
         {
             CmasRequests.Request request = await _requestsBusinessLayer.GetRequest(requestId);
 
@@ -103,6 +106,7 @@ namespace Cmas.Services.Requests
         {
             var result = _autoMapper.Map<SimpleRequestDto>(request);
 
+
             var contract = await _contractBusinessLayer.GetContract(result.ContractId);
             result.ContractNumber = contract.Number;
             result.ContractorName = contract.ContractorName;
@@ -119,18 +123,32 @@ namespace Cmas.Services.Requests
 
             foreach (var request in requests)
             {
-                var simpleRequest = await GetSimpleRequest(request);
+                SimpleRequestDto simpleRequest = null;
+                try
+                {
+                    simpleRequest = await GetSimpleRequest(request);
+                }
+                catch (NotFoundErrorException exc)
+                {
+                    _logger.Log(LogLevel.Warning, (EventId) 0,
+                        String.Format("Contract {0} not found", request.ContractId), exc,
+                        (state, error) => state.ToString());
+                    continue;
+                }
+
                 result.Add(simpleRequest);
             }
 
             return result;
         }
 
-        public RequestsModule(ICommandBuilder commandBuilder, IQueryBuilder queryBuilder, IMapper autoMapper) : base("/requests")
+        public RequestsModule(ICommandBuilder commandBuilder, IQueryBuilder queryBuilder, IMapper autoMapper,
+            ILoggerFactory loggerFactory) : base("/requests")
         {
             _autoMapper = autoMapper;
             _commandBuilder = commandBuilder;
             _queryBuilder = queryBuilder;
+            _logger = loggerFactory.CreateLogger<RequestsModule>();
 
             _requestsBusinessLayer = new RequestsBusinessLayer(_commandBuilder, _queryBuilder);
             _callOffOrdersBusinessLayer = new CallOffOrdersBusinessLayer(_commandBuilder, _queryBuilder);
@@ -162,10 +180,7 @@ namespace Cmas.Services.Requests
             /// /requests/{id} - получить заявку по указанному ID
             /// </summary>
             /// <return>DetailedRequestDto</return>
-            Get("/{id}", async args =>
-            {
-                return await GetDetailedRequest(args.id);
-            });
+            Get("/{id}", async args => { return await GetDetailedRequest(args.id); });
 
             /// <summary>
             /// Создать заявку
@@ -175,7 +190,8 @@ namespace Cmas.Services.Requests
             {
                 var createRequestDto = this.Bind<CreateRequestDto>();
 
-                string requestId = await _requestsBusinessLayer.CreateRequest(createRequestDto.ContractId, createRequestDto.CallOffOrderIds);
+                string requestId = await _requestsBusinessLayer.CreateRequest(createRequestDto.ContractId,
+                    createRequestDto.CallOffOrderIds);
 
                 return await GetDetailedRequest(requestId);
             });
@@ -185,10 +201,10 @@ namespace Cmas.Services.Requests
             /// На входе массив идентификаторов наряд заказов
             /// </summary>
             /// <return>DetailedRequestDto</return>
-            Put("/{id}",  async (args, ct) =>
+            Put("/{id}", async (args, ct) =>
             {
                 var ids = this.Bind<List<string>>();
-                 
+
                 CmasRequests.Request request = await _requestsBusinessLayer.GetRequest(args.id);
 
                 request.CallOffOrderIds = ids;
@@ -220,7 +236,7 @@ namespace Cmas.Services.Requests
 
                     await _requestsBusinessLayer.UpdateRequest(request);
                 }
-                
+
                 return await GetDetailedRequest(request);
             });
 
@@ -228,11 +244,7 @@ namespace Cmas.Services.Requests
             /// Удалить заявку
             /// </summary>
             /// <return>ID заявки</return>
-            Delete("/{id}", async args =>
-            {
-                return await _requestsBusinessLayer.DeleteRequest(args.id);
-            });
+            Delete("/{id}", async args => { return await _requestsBusinessLayer.DeleteRequest(args.id); });
         }
-
     }
 }
