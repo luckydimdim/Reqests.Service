@@ -17,6 +17,10 @@ using Cmas.BusinessLayers.Requests.Entities;
 using Nancy.IO;
 using Cmas.Infrastructure.ErrorHandler;
 using Microsoft.Extensions.Logging;
+using Cmas.BusinessLayers.TimeSheets;
+using Cmas.BusinessLayers.TimeSheets.Entities;
+using Cmas.BusinessLayers.CallOffOrders.Entities;
+using System.Linq;
 
 namespace Cmas.Services.Requests
 {
@@ -27,6 +31,7 @@ namespace Cmas.Services.Requests
         private readonly RequestsBusinessLayer _requestsBusinessLayer;
         private readonly CallOffOrdersBusinessLayer _callOffOrdersBusinessLayer;
         private readonly ContractBusinessLayer _contractBusinessLayer;
+        private readonly TimeSheetsBusinessLayer _timeSheetsBusinessLayer;
         private readonly IMapper _autoMapper;
         private ILogger _logger;
 
@@ -52,33 +57,96 @@ namespace Cmas.Services.Requests
         }
 
         /// <summary>
-        /// Заглушка - создание TS на каждый НЗ.Удалить после реализации сервиса работ с TS
+        ///  
         /// </summary>
-        private async Task<IEnumerable<TimeSheetDto>> CreateTimeSheets(IEnumerable<string> callOffOrderIds)
+        private async Task<IEnumerable<TimeSheetDto>> GetTimeSheets(IEnumerable<string> callOffOrderIds,
+            string requestId)
         {
             var result = new List<TimeSheetDto>();
-
-            int i = 1;
 
             foreach (var callOffOrderId in callOffOrderIds)
             {
                 var callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(callOffOrderId);
 
-                var timeSheet = new TimeSheetDto();
-                timeSheet.Id = callOffOrder.Id + "_" + i.ToString();
-                timeSheet.Assignee = callOffOrder.Assignee;
-                timeSheet.CreatedAt = DateTime.UtcNow;
-                timeSheet.UpdatedAt = DateTime.UtcNow;
-                timeSheet.Name = callOffOrder.Name;
-                timeSheet.Position = callOffOrder.Position;
-                timeSheet.StatusName = "Не заполнен";
-                timeSheet.StatusSysName = "Creation";
+                TimeSheet timeSheet = null;
+                try
+                {
+                    timeSheet =
+                        await _timeSheetsBusinessLayer.GetTimeSheetByCallOffOrderAndRequest(callOffOrderId, requestId);
+                }
+                catch (NotFoundErrorException exc)
+                {
+                    _logger.Log(LogLevel.Warning, (EventId) 0,
+                        String.Format("Time sheet by call-off order {0} and request {1} not found", callOffOrderId,
+                            requestId), exc,
+                        (state, error) => state.ToString());
+                    continue;
+                }
 
-                i++;
-                result.Add(timeSheet);
+
+                var timeSheetDto = new TimeSheetDto();
+                timeSheetDto.Id = timeSheet.Id;
+                timeSheetDto.Assignee = callOffOrder.Assignee;
+                timeSheetDto.CreatedAt = timeSheet.CreatedAt;
+                timeSheetDto.UpdatedAt = timeSheet.CreatedAt;
+                timeSheetDto.Name = callOffOrder.Name;
+                timeSheetDto.Position = callOffOrder.Position;
+                timeSheetDto.StatusName =
+                    timeSheet.Status
+                        .ToString(); // FIXME: метод в TimeSheetsBusinessLayer, возвращающий описание статуса
+                timeSheetDto.StatusSysName = timeSheet.Status.ToString();
+
+                result.Add(timeSheetDto);
             }
 
             return result;
+        }
+
+        public async Task CreateTimeSheetsAsync(string requestId, IEnumerable<string> callOffOrderIds)
+        {
+            foreach (var callOffOrderId in callOffOrderIds)
+            {
+                CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(callOffOrderId);
+                IEnumerable<TimeSheet> timeSheets =
+                    await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrderId);
+
+                // FIXME: Изменить после преобразования из string в DateTime
+                DateTime startDate = DateTime.Parse(callOffOrder.StartDate).ToUniversalTime();
+
+                // FIXME: Изменить после преобразования из string в DateTime
+                DateTime finishDate = DateTime.Parse(callOffOrder.FinishDate).ToUniversalTime();
+
+                string timeSheetId = null;
+                bool created = false;
+                while (startDate < finishDate)
+                {
+                    var tsExist =
+                        timeSheets.Where(
+                                ts =>
+                                    (ts.Month == startDate.Month &&
+                                     ts.Year == startDate.Year))
+                            .Any();
+
+                    if (tsExist)
+                    {
+                        startDate = startDate.AddMonths(1);
+                        continue;
+                    }
+                    else
+                    {
+                        timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
+                            startDate.Month, startDate.Year, requestId);
+                        created = true;
+                        break;
+                    }
+                }
+
+                if (!created)
+                {
+                    timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
+                        finishDate.Month, finishDate.Year, requestId);
+                }
+            }
         }
 
         private async Task<DetailedRequestDto> GetDetailedRequest(string requestId)
@@ -92,7 +160,7 @@ namespace Cmas.Services.Requests
         {
             DetailedRequestDto result = _autoMapper.Map<DetailedRequestDto>(request);
 
-            result.Documents = await CreateTimeSheets(request.CallOffOrderIds);
+            result.Documents = await GetTimeSheets(request.CallOffOrderIds, request.Id);
 
             result.Summary.WorksQuantity = request.CallOffOrderIds.Count;
 
@@ -153,6 +221,7 @@ namespace Cmas.Services.Requests
             _requestsBusinessLayer = new RequestsBusinessLayer(_commandBuilder, _queryBuilder);
             _callOffOrdersBusinessLayer = new CallOffOrdersBusinessLayer(_commandBuilder, _queryBuilder);
             _contractBusinessLayer = new ContractBusinessLayer(_commandBuilder, _queryBuilder);
+            _timeSheetsBusinessLayer = new TimeSheetsBusinessLayer(_commandBuilder, _queryBuilder);
 
             /// <summary>
             /// /requests/ - получить список всех заявок
@@ -192,6 +261,8 @@ namespace Cmas.Services.Requests
 
                 string requestId = await _requestsBusinessLayer.CreateRequest(createRequestDto.ContractId,
                     createRequestDto.CallOffOrderIds);
+
+                await CreateTimeSheetsAsync(requestId, createRequestDto.CallOffOrderIds);
 
                 return await GetDetailedRequest(requestId);
             });

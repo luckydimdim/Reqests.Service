@@ -25,8 +25,9 @@
     <PackageReference Include="AutoMapper" Version="6.0.1" />
     <PackageReference Include="Cmas.BusinessLayers.CallOffOrders" Version="*" />
     <PackageReference Include="Cmas.BusinessLayers.Contracts" Version="*" />
-    <PackageReference Include="Cmas.Infrastructure.Domain" Version="*" />
+    <PackageReference Include="Cmas.BusinessLayers.TimeSheets" Version="*" />
     <PackageReference Include="Cmas.BusinessLayers.Requests" Version="*" />
+    <PackageReference Include="Cmas.Infrastructure.Domain" Version="*" />
     <PackageReference Include="Cmas.Infrastructure.ErrorHandler" Version="*" />
     <PackageReference Include="Nancy" Version="2.0.0-clinteastwood" />
   </ItemGroup>

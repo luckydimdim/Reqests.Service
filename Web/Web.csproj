@@ -12,6 +12,7 @@
     <PackageReference Include="Cmas.DataLayers.CouchDb.Contracts" Version="*" />
     <PackageReference Include="Cmas.Infrastructure.Domain" Version="*" />
     <PackageReference Include="Cmas.DataLayers.CouchDb.Requests" Version="*" />
+    <PackageReference Include="Cmas.DataLayers.CouchDb.TimeSheets" Version="*" />
     <PackageReference Include="Cmas.Infrastructure.ServicesStartup" Version="*" />
     <PackageReference Include="Microsoft.AspNetCore" Version="1.1.1" />
     <PackageReference Include="Microsoft.AspNetCore.Owin" Version="1.1.1" />
