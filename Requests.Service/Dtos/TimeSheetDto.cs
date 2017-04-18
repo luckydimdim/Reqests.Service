@@ -50,5 +50,15 @@ namespace Cmas.Services.Requests.Dtos
         /// Системное имя статуса
         /// </summary>
         public string StatusSysName;
+
+        /// <summary>
+        /// Сумма
+        /// </summary>
+        public double Amount;
+
+        /// <summary>
+        /// Валюта
+        /// </summary>
+        public string CurrencyName = "RUR";
     }
 }

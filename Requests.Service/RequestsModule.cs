@@ -44,7 +44,7 @@ namespace Cmas.Services.Requests
             switch (status)
             {
                 case RequestStatus.Creation:
-                    return "Не заполнено";
+                    return "Не заполнена";
                 case RequestStatus.Validation:
                     return "На проверке";
                 case RequestStatus.Correction:
@@ -90,10 +90,9 @@ namespace Cmas.Services.Requests
                 timeSheetDto.CreatedAt = timeSheet.CreatedAt;
                 timeSheetDto.UpdatedAt = timeSheet.CreatedAt;
                 timeSheetDto.Name = callOffOrder.Name;
+                timeSheetDto.Amount = timeSheet.Amount;
                 timeSheetDto.Position = callOffOrder.Position;
-                timeSheetDto.StatusName =
-                    timeSheet.Status
-                        .ToString(); // FIXME: метод в TimeSheetsBusinessLayer, возвращающий описание статуса
+                timeSheetDto.StatusName = TimeSheetsBusinessLayer.GetStatusName(timeSheet.Status);
                 timeSheetDto.StatusSysName = timeSheet.Status.ToString();
 
                 result.Add(timeSheetDto);
