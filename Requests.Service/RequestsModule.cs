@@ -101,8 +101,10 @@ namespace Cmas.Services.Requests
             return result;
         }
 
-        public async Task CreateTimeSheetsAsync(string requestId, IEnumerable<string> callOffOrderIds)
+        public async Task<IEnumerable<string>> CreateTimeSheetsAsync(string requestId, IEnumerable<string> callOffOrderIds)
         {
+            var createdTimeSheets = new List<string>();
+
             foreach (var callOffOrderId in callOffOrderIds)
             {
                 CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(callOffOrderId);
@@ -110,10 +112,10 @@ namespace Cmas.Services.Requests
                     await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrderId);
 
                 // FIXME: Изменить после преобразования из string в DateTime
-                DateTime startDate = DateTime.Parse(callOffOrder.StartDate).ToUniversalTime();
+                DateTime startDate = DateTime.Parse(callOffOrder.StartDate);
 
                 // FIXME: Изменить после преобразования из string в DateTime
-                DateTime finishDate = DateTime.Parse(callOffOrder.FinishDate).ToUniversalTime();
+                DateTime finishDate = DateTime.Parse(callOffOrder.FinishDate);
 
                 string timeSheetId = null;
                 bool created = false;
@@ -145,7 +147,11 @@ namespace Cmas.Services.Requests
                     timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
                         finishDate.Month, finishDate.Year, requestId);
                 }
+
+                createdTimeSheets.Add(timeSheetId);
             }
+
+            return createdTimeSheets;
         }
 
         private async Task<DetailedRequestDto> GetDetailedRequest(string requestId)
@@ -258,12 +264,33 @@ namespace Cmas.Services.Requests
             {
                 var createRequestDto = this.Bind<CreateRequestDto>();
 
-                string requestId = await _requestsBusinessLayer.CreateRequest(createRequestDto.ContractId,
-                    createRequestDto.CallOffOrderIds);
+                string requestId = null;
+                IEnumerable<string> createdTimeSheetIds = null;
+                try
+                {
+                    requestId = await _requestsBusinessLayer.CreateRequest(createRequestDto.ContractId,
+                        createRequestDto.CallOffOrderIds);
 
-                await CreateTimeSheetsAsync(requestId, createRequestDto.CallOffOrderIds);
+                     createdTimeSheetIds =  await CreateTimeSheetsAsync(requestId, createRequestDto.CallOffOrderIds);
+                    return await GetDetailedRequest(requestId);
+                }
+                catch (Exception exc)
+                {
+                    if (!string.IsNullOrEmpty(requestId))
+                    {
+                        await _requestsBusinessLayer.DeleteRequest(requestId);
 
-                return await GetDetailedRequest(requestId);
+                        if (createdTimeSheetIds != null)
+                        {
+                            foreach (var timeSheetId in createdTimeSheetIds)
+                            {
+                                await _timeSheetsBusinessLayer.DeleteTimeSheet(timeSheetId);
+                            }
+                        }
+                    }
+
+                    throw exc;
+                }
             });
 
             /// <summary>
@@ -314,7 +341,19 @@ namespace Cmas.Services.Requests
             /// Удалить заявку
             /// </summary>
             /// <return>ID заявки</return>
-            Delete("/{id}", async args => { return await _requestsBusinessLayer.DeleteRequest(args.id); });
+            Delete("/{id}", async args =>
+            {
+                // удаляем табели
+
+                IEnumerable<string> ids = await _timeSheetsBusinessLayer.GetTimeSheetsByRequestId(args.id);
+
+                foreach (var id in ids)
+                {
+                    await _timeSheetsBusinessLayer.DeleteTimeSheet(id);
+                }
+
+                return await _requestsBusinessLayer.DeleteRequest(args.id);
+            });
         }
     }
 }
