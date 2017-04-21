@@ -21,6 +21,7 @@ using Cmas.BusinessLayers.TimeSheets;
 using Cmas.BusinessLayers.TimeSheets.Entities;
 using Cmas.BusinessLayers.CallOffOrders.Entities;
 using System.Linq;
+using System.Globalization;
 
 namespace Cmas.Services.Requests
 {
@@ -112,10 +113,10 @@ namespace Cmas.Services.Requests
                     await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrderId);
 
                 // FIXME: Изменить после преобразования из string в DateTime
-                DateTime startDate = DateTime.Parse(callOffOrder.StartDate);
+                DateTime startDate = DateTime.ParseExact(callOffOrder.StartDate, "dd.MM.yyyy", CultureInfo.InvariantCulture);
 
                 // FIXME: Изменить после преобразования из string в DateTime
-                DateTime finishDate = DateTime.Parse(callOffOrder.FinishDate);
+                DateTime finishDate = DateTime.ParseExact(callOffOrder.FinishDate, "dd.MM.yyyy", CultureInfo.InvariantCulture);
 
                 string timeSheetId = null;
                 bool created = false;
