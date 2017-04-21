@@ -10,5 +10,10 @@
             }
         }
 
+        /// <summary>
+        /// Сумма
+        /// </summary>
+        public double Amount;
+
     }
 }

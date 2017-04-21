@@ -31,9 +31,9 @@ namespace Cmas.Services.Requests.Dtos
         public double Amount;
 
         /// <summary>
-        /// Общая стоимость с НДС
+        /// В том числе НДС
         /// </summary>
-        public double AmountWithVat;
+        public double Vat;
 
         /// <summary>
         /// Зачет аванса
@@ -49,6 +49,11 @@ namespace Cmas.Services.Requests.Dtos
         /// Итого к оплате
         /// </summary>
         public double Total;
+         
+        /// <summary>
+        /// Валюта
+        /// </summary>
+        public string CurrencySysName = "RUR";
     }
 
     public class DetailedRequestDto

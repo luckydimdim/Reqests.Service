@@ -52,13 +52,13 @@ namespace Cmas.Services.Requests.Dtos
         public string StatusSysName;
 
         /// <summary>
-        /// Сумма
+        /// Валюта
         /// </summary>
-        public double Amount;
+        public string CurrencyName = "руб";
 
         /// <summary>
         /// Валюта
         /// </summary>
-        public string CurrencyName = "RUR";
+        public string CurrencySysName = "RUR";
     }
 }

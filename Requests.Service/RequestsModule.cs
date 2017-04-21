@@ -102,7 +102,8 @@ namespace Cmas.Services.Requests
             return result;
         }
 
-        public async Task<IEnumerable<string>> CreateTimeSheetsAsync(string requestId, IEnumerable<string> callOffOrderIds)
+        public async Task<IEnumerable<string>> CreateTimeSheetsAsync(string requestId,
+            IEnumerable<string> callOffOrderIds)
         {
             var createdTimeSheets = new List<string>();
 
@@ -113,10 +114,12 @@ namespace Cmas.Services.Requests
                     await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrderId);
 
                 // FIXME: Изменить после преобразования из string в DateTime
-                DateTime startDate = DateTime.ParseExact(callOffOrder.StartDate, "dd.MM.yyyy", CultureInfo.InvariantCulture);
+                DateTime startDate = DateTime.ParseExact(callOffOrder.StartDate, "dd.MM.yyyy",
+                    CultureInfo.InvariantCulture);
 
                 // FIXME: Изменить после преобразования из string в DateTime
-                DateTime finishDate = DateTime.ParseExact(callOffOrder.FinishDate, "dd.MM.yyyy", CultureInfo.InvariantCulture);
+                DateTime finishDate = DateTime.ParseExact(callOffOrder.FinishDate, "dd.MM.yyyy",
+                    CultureInfo.InvariantCulture);
 
                 string timeSheetId = null;
                 bool created = false;
@@ -166,9 +169,19 @@ namespace Cmas.Services.Requests
         {
             DetailedRequestDto result = _autoMapper.Map<DetailedRequestDto>(request);
 
+            var contract = await _contractBusinessLayer.GetContract(request.ContractId);
+             
             result.Documents = await GetTimeSheets(request.CallOffOrderIds, request.Id);
 
             result.Summary.WorksQuantity = request.CallOffOrderIds.Count;
+            result.Summary.WorksAmount = result.Documents.Sum(doc => doc.Amount);
+            result.Summary.Total = result.Summary.WorksAmount;
+            result.Summary.Amount = result.Summary.WorksAmount;
+
+            if (contract.VatIncluded)
+            {
+                result.Summary.Vat = Math.Round((result.Summary.WorksAmount / 1.18 - result.Summary.WorksAmount) * -1);
+            }
 
             result.StatusName = GetRequestStatusName(request.Status);
             result.StatusSysName = request.Status.ToString();
@@ -272,7 +285,7 @@ namespace Cmas.Services.Requests
                     requestId = await _requestsBusinessLayer.CreateRequest(createRequestDto.ContractId,
                         createRequestDto.CallOffOrderIds);
 
-                     createdTimeSheetIds =  await CreateTimeSheetsAsync(requestId, createRequestDto.CallOffOrderIds);
+                    createdTimeSheetIds = await CreateTimeSheetsAsync(requestId, createRequestDto.CallOffOrderIds);
                     return await GetDetailedRequest(requestId);
                 }
                 catch (Exception exc)
