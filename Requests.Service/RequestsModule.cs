@@ -11,6 +11,7 @@ using Cmas.Infrastructure.ErrorHandler;
 using System.Threading;
 using Nancy.Responses.Negotiation;
 using Nancy.Validation;
+using Cmas.Infrastructure.Security;
 
 namespace Cmas.Services.Requests
 {
@@ -20,6 +21,11 @@ namespace Cmas.Services.Requests
 
         public RequestsModule(IServiceProvider serviceProvider) : base("/requests")
         {
+
+            this.RequiresAuthentication();
+            //this.RequiresClaims(new[] { "Admin" });
+
+
             _requestsService = new RequestsService(serviceProvider);
 
             /// <summary>
