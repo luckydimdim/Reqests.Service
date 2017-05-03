@@ -13,6 +13,7 @@ using Nancy.Responses.Negotiation;
 using Nancy.Validation;
 using Cmas.Infrastructure.Security;
 
+
 namespace Cmas.Services.Requests
 {
     public class RequestsModule : NancyModule
@@ -23,9 +24,7 @@ namespace Cmas.Services.Requests
         {
 
             this.RequiresAuthentication();
-            //this.RequiresClaims(new[] { "Admin" });
-
-
+             
             _requestsService = new RequestsService(serviceProvider);
 
             /// <summary>
@@ -86,7 +85,7 @@ namespace Cmas.Services.Requests
         }
 
         private async Task<DetailedRequestDto> CreateRequestHandlerAsync(dynamic args, CancellationToken ct)
-        {
+        { 
             var request = this.Bind<CreateRequestDto>();
 
             var validationResult = this.Validate(request);
@@ -111,7 +110,7 @@ namespace Cmas.Services.Requests
             string statusSysName = (Request.Body as RequestStream).AsString();
 
             RequestStatus parsedStatus = RequestStatus.None;
-
+             
             if (!Enum.TryParse<RequestStatus>(statusSysName, ignoreCase: true, result: out parsedStatus))
                 throw new Exception("Incorrect status");
 

@@ -250,17 +250,25 @@ namespace Cmas.Services.Requests
             return result;
         }
 
-
         public async Task<DetailedRequestDto> UpdateRequestStatusHandlerAsync(string requestId, RequestStatus status)
         {
             Request request = await _requestsBusinessLayer.GetRequest(requestId);
 
-            if (request.Status != status)
-            {
-                request.Status = status;
+            if (request.Status == status)
+                return await GetDetailedRequest(request);
 
-                await _requestsBusinessLayer.UpdateRequest(request);
-            }
+            // проверки смены статуса
+
+            if (request.Status == RequestStatus.Done)
+                throw new Exception("Cannot change status of the request with status 'Done'");
+
+
+            if (status == RequestStatus.Creation)
+                throw new Exception("Cannot change status of the request to 'Creation'");
+
+            request.Status = status;
+
+            await _requestsBusinessLayer.UpdateRequest(request);
 
             return await GetDetailedRequest(request);
         }
