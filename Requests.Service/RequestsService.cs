@@ -16,6 +16,8 @@ using Cmas.Services.Requests.Dtos;
 using Cmas.Infrastructure.ErrorHandler;
 using Cmas.BusinessLayers.TimeSheets.Entities;
 using Cmas.BusinessLayers.CallOffOrders.Entities;
+using Nancy;
+using Request = Cmas.BusinessLayers.Requests.Entities.Request;
 
 namespace Cmas.Services.Requests
 {
@@ -23,13 +25,15 @@ namespace Cmas.Services.Requests
     {
         private readonly RequestsBusinessLayer _requestsBusinessLayer;
         private readonly CallOffOrdersBusinessLayer _callOffOrdersBusinessLayer;
-        private readonly ContractBusinessLayer _contractBusinessLayer;
+        private readonly ContractsBusinessLayer _contractsBusinessLayer;
         private readonly TimeSheetsBusinessLayer _timeSheetsBusinessLayer;
         private readonly IMapper _autoMapper;
+        private readonly NancyContext _context;
         private ILogger _logger;
 
-        public RequestsService(IServiceProvider serviceProvider)
+        public RequestsService(IServiceProvider serviceProvider, NancyContext context)
         {
+            _context = context;
             var _commandBuilder = (ICommandBuilder) serviceProvider.GetService(typeof(ICommandBuilder));
             var _queryBuilder = (IQueryBuilder) serviceProvider.GetService(typeof(IQueryBuilder));
             var _loggerFactory = (ILoggerFactory) serviceProvider.GetService(typeof(ILoggerFactory));
@@ -38,7 +42,7 @@ namespace Cmas.Services.Requests
             _logger = _loggerFactory.CreateLogger<RequestsService>();
 
             _callOffOrdersBusinessLayer = new CallOffOrdersBusinessLayer(_commandBuilder, _queryBuilder);
-            _contractBusinessLayer = new ContractBusinessLayer(_commandBuilder, _queryBuilder);
+            _contractsBusinessLayer = new ContractsBusinessLayer(_commandBuilder, _queryBuilder);
             _timeSheetsBusinessLayer = new TimeSheetsBusinessLayer(_commandBuilder, _queryBuilder);
             _requestsBusinessLayer = new RequestsBusinessLayer(_commandBuilder, _queryBuilder);
         }
@@ -46,13 +50,17 @@ namespace Cmas.Services.Requests
         public async Task<string> DeleteRequestAsync(string requestId)
         {
             // удаляем табели
+            IEnumerable<TimeSheet> timeSheets = await _timeSheetsBusinessLayer.GetTimeSheetsByRequestId(requestId);
 
-            IEnumerable<string> ids = await _timeSheetsBusinessLayer.GetTimeSheetsByRequestId(requestId);
+            _logger.LogInformation(string.Format("deleting time-sheets before request: {0} ...",
+                string.Join(",", timeSheets.Select(t => t.Id))));
 
-            foreach (var id in ids)
+            foreach (var timeSheet in timeSheets)
             {
-                await _timeSheetsBusinessLayer.DeleteTimeSheet(id);
+                await _timeSheetsBusinessLayer.DeleteTimeSheet(timeSheet.Id);
             }
+
+            _logger.LogInformation("Deleting request...");
 
             return await _requestsBusinessLayer.DeleteRequest(requestId);
         }
@@ -128,8 +136,13 @@ namespace Cmas.Services.Requests
         {
             var createdTimeSheets = new List<string>();
 
+            _logger.LogInformation(string.Format("creating time sheets for request with id = {0} call off orders: {1}",
+                requestId, string.Join(",", callOffOrderIds)));
+
             foreach (var callOffOrderId in callOffOrderIds)
             {
+                _logger.LogInformation(string.Format("step 1. call off order = {0}", callOffOrderId));
+
                 CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(callOffOrderId);
                 IEnumerable<TimeSheet> timeSheets =
                     await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrderId);
@@ -141,6 +154,9 @@ namespace Cmas.Services.Requests
                 // FIXME: Изменить после преобразования из string в DateTime
                 DateTime finishDate = DateTime.ParseExact(callOffOrder.FinishDate, "dd.MM.yyyy",
                     CultureInfo.InvariantCulture);
+
+                _logger.LogInformation(string.Format("step 2. startDate = {0} finishDate = {1}", startDate.ToString(),
+                    finishDate.ToString()));
 
                 string timeSheetId = null;
                 bool created = false;
@@ -155,11 +171,16 @@ namespace Cmas.Services.Requests
 
                     if (tsExist)
                     {
+                        _logger.LogInformation(string.Format("time sheet found within {0}.{1}. Skipping this month..",
+                            startDate.Month, startDate.Year));
                         startDate = startDate.AddMonths(1);
                         continue;
                     }
                     else
                     {
+                        _logger.LogInformation(string.Format("creating time sheet for period {0}.{1}", startDate.Month,
+                            startDate.Year));
+
                         timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
                             startDate.Month, startDate.Year, requestId);
                         created = true;
@@ -169,12 +190,16 @@ namespace Cmas.Services.Requests
 
                 if (!created)
                 {
+                    _logger.LogInformation(string.Format("creating time sheet for period {0}.{1}", finishDate.Month,
+                        finishDate.Year));
                     timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
                         finishDate.Month, finishDate.Year, requestId);
                 }
 
                 createdTimeSheets.Add(timeSheetId);
             }
+
+            _logger.LogInformation(string.Format("created time sheets: {0}", string.Join(",", createdTimeSheets)));
 
             return createdTimeSheets;
         }
@@ -190,7 +215,7 @@ namespace Cmas.Services.Requests
         {
             DetailedRequestDto result = _autoMapper.Map<DetailedRequestDto>(request);
 
-            var contract = await _contractBusinessLayer.GetContract(request.ContractId);
+            var contract = await _contractsBusinessLayer.GetContract(request.ContractId);
 
             result.Documents = await GetTimeSheets(request.CallOffOrderIds, request.Id);
 
@@ -215,7 +240,7 @@ namespace Cmas.Services.Requests
             var result = _autoMapper.Map<SimpleRequestDto>(request);
 
 
-            var contract = await _contractBusinessLayer.GetContract(result.ContractId);
+            var contract = await _contractsBusinessLayer.GetContract(result.ContractId);
             result.ContractNumber = contract.Number;
             result.ContractorName = contract.ContractorName;
 
@@ -250,27 +275,58 @@ namespace Cmas.Services.Requests
             return result;
         }
 
-        public async Task<DetailedRequestDto> UpdateRequestStatusHandlerAsync(string requestId, RequestStatus status)
+        /// <summary>
+        /// Обновление статуса заявки. Одновременно, если надо, меняется статус первичной документации
+        /// </summary>
+        public async Task UpdateRequestStatusAsync(string requestId, RequestStatus status)
         {
+            _logger.LogInformation(string.Format("changing request status. request = {0} status = {1}", requestId,
+                status.ToString()));
+
             Request request = await _requestsBusinessLayer.GetRequest(requestId);
 
             if (request.Status == status)
-                return await GetDetailedRequest(request);
+                return;
 
             // проверки смены статуса
 
             if (request.Status == RequestStatus.Done)
-                throw new Exception("Cannot change status of the request with status 'Done'");
-
+                throw new Exception("Cannot change request status from 'Done'");
 
             if (status == RequestStatus.Creation)
-                throw new Exception("Cannot change status of the request to 'Creation'");
+                throw new Exception("Cannot change request status to 'Creation'");
 
-            request.Status = status;
+            /*
+            var timeSheets = await _timeSheetsBusinessLayer.GetTimeSheetsByRequestId(requestId);
+
+            if (status == RequestStatus.Validation)
+            {
+                if (request.Status != RequestStatus.Creation && request.Status != RequestStatus.Correction)
+                {
+                    throw new Exception(string.Format("Cannot change request status from {0} to {1}",
+                        request.Status, status));
+                }
+
+                foreach (var timeSheet in timeSheets)
+                {
+                    if (timeSheet.Status != TimeSheetStatus.Done && timeSheet.Status != TimeSheetStatus.Correction)
+                    {
+                        throw new Exception(string.Format(
+                            "Cannot change request status from {0} to {1} because time-sheet {2} with status {3}",
+                            request.Status, status, timeSheet.Id, timeSheet.Status));
+                    }
+
+                    timeSheet.Status = TimeSheetStatus.Validation;
+                }
+
+              
+                request.Status = status;
+            }*/
+
 
             await _requestsBusinessLayer.UpdateRequest(request);
 
-            return await GetDetailedRequest(request);
+            return;
         }
 
         public async Task<DetailedRequestDto> UpdateRequestAsync(string requestId, IList<string> callOffOrderIds)

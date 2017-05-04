@@ -24,8 +24,8 @@ namespace Cmas.Services.Requests
         {
 
             this.RequiresAuthentication();
-             
-            _requestsService = new RequestsService(serviceProvider);
+            
+            _requestsService = new RequestsService(serviceProvider, Context);
 
             /// <summary>
             /// /requests/ - получить список всех заявок
@@ -58,7 +58,7 @@ namespace Cmas.Services.Requests
             /// <summary>
             /// Обновить статус заявки
             /// </summary>
-            Put<DetailedRequestDto>("{id}/status", UpdateRequestStatusHandlerAsync);
+            Put<Negotiator>("{id}/status", UpdateRequestStatusHandlerAsync);
 
             /// <summary>
             /// Удалить заявку
@@ -105,7 +105,7 @@ namespace Cmas.Services.Requests
             return await _requestsService.UpdateRequestAsync(args.id, ids);
         }
 
-        private async Task<DetailedRequestDto> UpdateRequestStatusHandlerAsync(dynamic args, CancellationToken ct)
+        private async Task<Negotiator> UpdateRequestStatusHandlerAsync(dynamic args, CancellationToken ct)
         {
             string statusSysName = (Request.Body as RequestStream).AsString();
 
@@ -114,7 +114,9 @@ namespace Cmas.Services.Requests
             if (!Enum.TryParse<RequestStatus>(statusSysName, ignoreCase: true, result: out parsedStatus))
                 throw new Exception("Incorrect status");
 
-            return await _requestsService.UpdateRequestStatusHandlerAsync(args.id, parsedStatus);
+            await _requestsService.UpdateRequestStatusAsync(args.id, parsedStatus);
+
+            return Negotiate.WithStatusCode(HttpStatusCode.OK);
         }
 
         private async Task<Negotiator> DeleteRequestHandlerAsync(dynamic args, CancellationToken ct)
