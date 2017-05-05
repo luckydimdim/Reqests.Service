@@ -147,13 +147,17 @@ namespace Cmas.Services.Requests
                 IEnumerable<TimeSheet> timeSheets =
                     await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrderId);
 
-                // FIXME: Изменить после преобразования из string в DateTime
-                DateTime startDate = DateTime.ParseExact(callOffOrder.StartDate, "dd.MM.yyyy",
-                    CultureInfo.InvariantCulture);
+                if (!callOffOrder.StartDate.HasValue || !callOffOrder.FinishDate.HasValue)
+                {
+                    _logger.LogWarning(string.Format("callOffOrder {0} has incorrect period"));
+                    continue;
+                }
+
+                DateTime startDate = callOffOrder.StartDate.Value;
 
                 // FIXME: Изменить после преобразования из string в DateTime
-                DateTime finishDate = DateTime.ParseExact(callOffOrder.FinishDate, "dd.MM.yyyy",
-                    CultureInfo.InvariantCulture);
+                DateTime finishDate = callOffOrder.FinishDate.Value;
+ 
 
                 _logger.LogInformation(string.Format("step 2. startDate = {0} finishDate = {1}", startDate.ToString(),
                     finishDate.ToString()));
