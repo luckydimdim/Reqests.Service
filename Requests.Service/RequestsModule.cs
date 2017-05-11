@@ -18,15 +18,28 @@ namespace Cmas.Services.Requests
 {
     public class RequestsModule : NancyModule
     {
-        private readonly RequestsService _requestsService;
+        private IServiceProvider _serviceProvider;
+
+        private RequestsService requestsService;
+
+        private RequestsService _requestsService
+        {
+            get
+            {
+                if (requestsService == null)
+                    requestsService = new RequestsService(_serviceProvider, Context);
+
+                return requestsService;
+            }
+        }
 
         public RequestsModule(IServiceProvider serviceProvider) : base("/requests")
         {
 
             this.RequiresAuthentication();
-            
-            _requestsService = new RequestsService(serviceProvider, Context);
 
+            _serviceProvider = serviceProvider;
+             
             /// <summary>
             /// /requests/ - получить список всех заявок
             /// </summary>

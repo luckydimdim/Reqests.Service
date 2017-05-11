@@ -31,9 +31,9 @@ namespace Cmas.Services.Requests
         private readonly NancyContext _context;
         private ILogger _logger;
 
-        public RequestsService(IServiceProvider serviceProvider, NancyContext context)
+        public RequestsService(IServiceProvider serviceProvider, NancyContext ctx)
         {
-            _context = context;
+            _context = ctx;
             var _commandBuilder = (ICommandBuilder) serviceProvider.GetService(typeof(ICommandBuilder));
             var _queryBuilder = (IQueryBuilder) serviceProvider.GetService(typeof(IQueryBuilder));
             var _loggerFactory = (ILoggerFactory) serviceProvider.GetService(typeof(ILoggerFactory));
@@ -41,10 +41,10 @@ namespace Cmas.Services.Requests
             _autoMapper = (IMapper) serviceProvider.GetService(typeof(IMapper));
             _logger = _loggerFactory.CreateLogger<RequestsService>();
 
-            _callOffOrdersBusinessLayer = new CallOffOrdersBusinessLayer(_commandBuilder, _queryBuilder);
-            _contractsBusinessLayer = new ContractsBusinessLayer(_commandBuilder, _queryBuilder);
-            _timeSheetsBusinessLayer = new TimeSheetsBusinessLayer(_commandBuilder, _queryBuilder);
-            _requestsBusinessLayer = new RequestsBusinessLayer(_commandBuilder, _queryBuilder);
+            _callOffOrdersBusinessLayer = new CallOffOrdersBusinessLayer(serviceProvider, ctx.CurrentUser);
+            _contractsBusinessLayer = new ContractsBusinessLayer(serviceProvider, ctx.CurrentUser);
+            _timeSheetsBusinessLayer = new TimeSheetsBusinessLayer(serviceProvider, ctx.CurrentUser);
+            _requestsBusinessLayer = new RequestsBusinessLayer(serviceProvider, ctx.CurrentUser);
         }
 
         public async Task<string> DeleteRequestAsync(string requestId)
@@ -73,13 +73,19 @@ namespace Cmas.Services.Requests
         {
             switch (status)
             {
-                case RequestStatus.Creation:
+                case RequestStatus.Empty:
                     return "Не заполнена";
-                case RequestStatus.Validation:
+                case RequestStatus.Creating:
+                    return "Заполнение";
+                case RequestStatus.Created:
+                    return "Заполнена";
+                case RequestStatus.Approving:
                     return "На проверке";
-                case RequestStatus.Correction:
+                case RequestStatus.Correcting:
                     return "Содержит ошибки";
-                case RequestStatus.Done:
+                case RequestStatus.Corrected:
+                    return "Исправлена";
+                case RequestStatus.Approved:
                     return "Проверена";
                 default:
                     return "";
@@ -157,7 +163,7 @@ namespace Cmas.Services.Requests
 
                 // FIXME: Изменить после преобразования из string в DateTime
                 DateTime finishDate = callOffOrder.FinishDate.Value;
- 
+
 
                 _logger.LogInformation(string.Format("step 2. startDate = {0} finishDate = {1}", startDate.ToString(),
                     finishDate.ToString()));
@@ -289,48 +295,25 @@ namespace Cmas.Services.Requests
 
             Request request = await _requestsBusinessLayer.GetRequest(requestId);
 
-            if (request.Status == status)
-                return;
-
-            // проверки смены статуса
-
-            if (request.Status == RequestStatus.Done)
-                throw new Exception("Cannot change request status from 'Done'");
-
-            if (status == RequestStatus.Creation)
-                throw new Exception("Cannot change request status to 'Creation'");
-
-            /*
             var timeSheets = await _timeSheetsBusinessLayer.GetTimeSheetsByRequestId(requestId);
 
-            if (status == RequestStatus.Validation)
+            if (timeSheets.Where(t => t.Status == TimeSheetStatus.Empty || t.Status == TimeSheetStatus.Creating).Any())
             {
-                if (request.Status != RequestStatus.Creation && request.Status != RequestStatus.Correction)
+                throw new GeneralServiceErrorException(string.Format("Can not change status from {0} to {1}", request.Status, status));
+            }
+
+            await _requestsBusinessLayer.UpdateRequestStatusAsync(request, status);
+
+            //TODO: переделать на событийную модель (шину)
+            if (status == RequestStatus.Approving)
+            {
+                foreach (var timeSheet in timeSheets.Where(t=>t.Status != TimeSheetStatus.Approved))
                 {
-                    throw new Exception(string.Format("Cannot change request status from {0} to {1}",
-                        request.Status, status));
+                    await _timeSheetsBusinessLayer.UpdateTimeSheetStatus(timeSheet, TimeSheetStatus.Approving);
                 }
-
-                foreach (var timeSheet in timeSheets)
-                {
-                    if (timeSheet.Status != TimeSheetStatus.Done && timeSheet.Status != TimeSheetStatus.Correction)
-                    {
-                        throw new Exception(string.Format(
-                            "Cannot change request status from {0} to {1} because time-sheet {2} with status {3}",
-                            request.Status, status, timeSheet.Id, timeSheet.Status));
-                    }
-
-                    timeSheet.Status = TimeSheetStatus.Validation;
-                }
-
-              
-                request.Status = status;
-            }*/
-
-
-            await _requestsBusinessLayer.UpdateRequest(request);
-
-            return;
+            }
+ 
+            
         }
 
         public async Task<DetailedRequestDto> UpdateRequestAsync(string requestId, IList<string> callOffOrderIds)
