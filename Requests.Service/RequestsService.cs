@@ -249,10 +249,13 @@ namespace Cmas.Services.Requests
         {
             var result = _autoMapper.Map<SimpleRequestDto>(request);
 
+            var documents = await GetTimeSheets(request.CallOffOrderIds, request.Id);
 
             var contract = await _contractsBusinessLayer.GetContract(result.ContractId);
             result.ContractNumber = contract.Number;
             result.ContractorName = contract.ContractorName;
+
+            result.Amount = documents.Sum(doc => doc.Amount);
 
             result.StatusName = GetRequestStatusName(request.Status);
             result.StatusSysName = request.Status.ToString();
