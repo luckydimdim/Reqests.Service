@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 
 namespace Cmas.Services.Requests.Dtos
@@ -42,21 +43,11 @@ namespace Cmas.Services.Requests.Dtos
         /// Наименование подрядчика
         /// </summary>
         public string ContractorName;
-
-        /// <summary>
-        /// Название валюты договора
-        /// </summary>
-        public string CurrencyName = "руб.";
-
-        /// <summary>
-        /// Системное имя валюты
-        /// </summary>
-        public string CurrencySysName = "RUR";
-
+        
         /// <summary>
         /// Сумма к оплате
         /// </summary>
-        public double Amount;
+        public List<AmountDto> Amounts = new List<AmountDto>();
 
         /// <summary>
         /// Имя статуса для показа

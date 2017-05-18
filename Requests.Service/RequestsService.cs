@@ -266,12 +266,23 @@ namespace Cmas.Services.Requests
 
             var documents = await GetTimeSheets(request.CallOffOrderIds, request.Id);
 
+            var requestCurrencies = documents.Select(d => d.CurrencySysName).Distinct();
+
             var contract = await _contractsBusinessLayer.GetContract(result.ContractId);
             result.ContractNumber = contract.Number;
             result.ContractorName = contract.ContractorName;
 
-            result.Amount = documents.Sum(doc => doc.Amount);
-
+            foreach (var currency in requestCurrencies)
+            {
+                var amount = new AmountDto
+                {
+                    CurrencySysName = currency,
+                    Value = documents.Where(doc => doc.CurrencySysName == currency).Sum(doc => doc.Amount)
+                };
+                
+                result.Amounts.Add(amount);
+            }
+             
             result.StatusName = GetRequestStatusName(request.Status);
             result.StatusSysName = request.Status.ToString();
 
