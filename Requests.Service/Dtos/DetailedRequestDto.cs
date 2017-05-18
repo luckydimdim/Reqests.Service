@@ -13,7 +13,7 @@ namespace Cmas.Services.Requests.Dtos
         /// <summary>
         /// Сумма работ
         /// </summary>
-        public double WorksAmount;
+        public List<AmountDto> WorksAmount = new List<AmountDto>();
 
         /// <summary>
         /// Всего материалов
@@ -23,37 +23,22 @@ namespace Cmas.Services.Requests.Dtos
         /// <summary>
         /// Сумма материалов
         /// </summary>
-        public double MaterialsAmount;
+        public List<AmountDto> MaterialsAmount = new List<AmountDto>();
 
         /// <summary>
         /// Общая стоимость
         /// </summary>
-        public double Amount;
+        public List<AmountDto> Amounts = new List<AmountDto>();
 
         /// <summary>
         /// В том числе НДС
         /// </summary>
-        public double Vat;
-
-        /// <summary>
-        /// Зачет аванса
-        /// </summary>
-        public double PrepaidAmount;
-
-        /// <summary>
-        /// Удержано резерва
-        /// </summary>
-        public double ReserveAmount;
+        public List<AmountDto> Vats = new List<AmountDto>();
 
         /// <summary>
         /// Итого к оплате
         /// </summary>
-        public double Total;
-         
-        /// <summary>
-        /// Валюта
-        /// </summary>
-        public string CurrencySysName = "RUR";
+        public List<AmountDto> Totals = new List<AmountDto>();
     }
 
     public class DetailedRequestDto

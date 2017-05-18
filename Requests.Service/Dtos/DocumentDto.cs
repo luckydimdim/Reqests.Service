@@ -15,5 +15,11 @@
         /// </summary>
         public double Amount;
 
+
+
+        /// <summary>
+        /// Валюта
+        /// </summary>
+        public string CurrencySysName;
     }
 }

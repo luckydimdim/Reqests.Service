@@ -51,10 +51,5 @@ namespace Cmas.Services.Requests.Dtos
         /// </summary>
         public string StatusSysName;
 
-
-        /// <summary>
-        /// Валюта
-        /// </summary>
-        public string CurrencySysName;
     }
 }

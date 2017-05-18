@@ -226,14 +226,33 @@ namespace Cmas.Services.Requests
             result.Documents = await GetTimeSheets(request.CallOffOrderIds, request.Id);
 
             result.Summary.WorksQuantity = request.CallOffOrderIds.Count;
-            result.Summary.WorksAmount = result.Documents.Sum(doc => doc.Amount);
-            result.Summary.Total = result.Summary.WorksAmount;
-            result.Summary.Amount = result.Summary.WorksAmount;
 
-            if (contract.VatIncluded)
+            var requestCurrencies = result.Documents.Select(d => d.CurrencySysName).Distinct();
+
+            foreach (var currency in requestCurrencies)
             {
-                result.Summary.Vat = Math.Round((result.Summary.WorksAmount / 1.18 - result.Summary.WorksAmount) * -1);
+                var worksAmount = new AmountDto
+                {
+                    CurrencySysName = currency,
+                    Value = result.Documents.Where(doc => doc.CurrencySysName == currency).Sum(doc => doc.Amount)
+                };
+
+                result.Summary.Totals.Add(worksAmount);
+                result.Summary.Amounts.Add(worksAmount);
+                result.Summary.WorksAmount.Add(worksAmount);
+
+                if (contract.VatIncluded)
+                {
+                    var vat = new AmountDto
+                    {
+                        CurrencySysName = currency,
+                        Value = Math.Round((worksAmount.Value / 1.18 - worksAmount.Value) * -1)
+                    };
+
+                    result.Summary.Vats.Add(vat);
+                }
             }
+
 
             result.StatusName = GetRequestStatusName(request.Status);
             result.StatusSysName = request.Status.ToString();
@@ -298,7 +317,8 @@ namespace Cmas.Services.Requests
 
             if (timeSheets.Where(t => t.Status == TimeSheetStatus.Empty || t.Status == TimeSheetStatus.Creating).Any())
             {
-                throw new GeneralServiceErrorException(string.Format("Can not change status from {0} to {1}", request.Status, status));
+                throw new GeneralServiceErrorException(
+                    string.Format("Can not change status from {0} to {1}", request.Status, status));
             }
 
             await _requestsBusinessLayer.UpdateRequestStatusAsync(request, status);
@@ -306,13 +326,11 @@ namespace Cmas.Services.Requests
             //TODO: переделать на событийную модель (шину)
             if (status == RequestStatus.Approving)
             {
-                foreach (var timeSheet in timeSheets.Where(t=>t.Status != TimeSheetStatus.Approved))
+                foreach (var timeSheet in timeSheets.Where(t => t.Status != TimeSheetStatus.Approved))
                 {
                     await _timeSheetsBusinessLayer.UpdateTimeSheetStatus(timeSheet, TimeSheetStatus.Approving);
                 }
             }
- 
-            
         }
 
         public async Task<DetailedRequestDto> UpdateRequestAsync(string requestId, IList<string> callOffOrderIds)
