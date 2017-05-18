@@ -120,13 +120,9 @@ namespace Cmas.Services.Requests
                 }
 
 
-                var timeSheetDto = new TimeSheetDto();
-                timeSheetDto.Id = timeSheet.Id;
+                var timeSheetDto = _autoMapper.Map<TimeSheetDto>(timeSheet);
                 timeSheetDto.Assignee = callOffOrder.Assignee;
-                timeSheetDto.CreatedAt = timeSheet.CreatedAt;
-                timeSheetDto.UpdatedAt = timeSheet.CreatedAt;
                 timeSheetDto.Name = callOffOrder.Name;
-                timeSheetDto.Amount = timeSheet.Amount;
                 timeSheetDto.Position = callOffOrder.Position;
                 timeSheetDto.StatusName = TimeSheetsBusinessLayer.GetStatusName(timeSheet.Status);
                 timeSheetDto.StatusSysName = timeSheet.Status.ToString();
@@ -192,7 +188,7 @@ namespace Cmas.Services.Requests
                             startDate.Year));
 
                         timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
-                            startDate.Month, startDate.Year, requestId);
+                            startDate.Month, startDate.Year, requestId, callOffOrder.CurrencySysName);
                         created = true;
                         break;
                     }
@@ -203,7 +199,7 @@ namespace Cmas.Services.Requests
                     _logger.LogInformation(string.Format("creating time sheet for period {0}.{1}", finishDate.Month,
                         finishDate.Year));
                     timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
-                        finishDate.Month, finishDate.Year, requestId);
+                        finishDate.Month, finishDate.Year, requestId, callOffOrder.CurrencySysName);
                 }
 
                 createdTimeSheets.Add(timeSheetId);

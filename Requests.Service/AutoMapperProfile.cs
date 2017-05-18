@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using Cmas.BusinessLayers.Requests.Entities;
+using Cmas.BusinessLayers.TimeSheets.Entities;
 using Cmas.Services.Requests.Dtos;
 
 namespace Cmas.Services.Requests
@@ -10,6 +11,7 @@ namespace Cmas.Services.Requests
         {
             CreateMap<Request, DetailedRequestDto>();
             CreateMap<Request, SimpleRequestDto>();
+            CreateMap<TimeSheet, TimeSheetDto>();
         }
     }
 
