@@ -21,6 +21,9 @@ using Request = Cmas.BusinessLayers.Requests.Entities.Request;
 
 namespace Cmas.Services.Requests
 {
+    /// <summary>
+    /// Сервис заявок на проверку
+    /// </summary>
     public class RequestsService
     {
         private readonly RequestsBusinessLayer _requestsBusinessLayer;
@@ -47,53 +50,198 @@ namespace Cmas.Services.Requests
             _requestsBusinessLayer = new RequestsBusinessLayer(serviceProvider, ctx.CurrentUser);
         }
 
+        /// <summary>
+        /// Удалить заявку
+        /// </summary>
         public async Task<string> DeleteRequestAsync(string requestId)
         {
             // удаляем табели
             IEnumerable<TimeSheet> timeSheets = await _timeSheetsBusinessLayer.GetTimeSheetsByRequestId(requestId);
 
-            _logger.LogInformation(string.Format("deleting time-sheets before request: {0} ...",
-                string.Join(",", timeSheets.Select(t => t.Id))));
+            var timeSheetsIds = string.Join(",", timeSheets.Select(t => t.Id));
 
-            foreach (var timeSheet in timeSheets)
+            _logger.LogInformation($"deleting time-sheets before request: {timeSheetsIds} ...");
+
+            try
             {
-                await _timeSheetsBusinessLayer.DeleteTimeSheet(timeSheet.Id);
+                foreach (var timeSheet in timeSheets)
+                {
+                    await _timeSheetsBusinessLayer.DeleteTimeSheet(timeSheet.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new GeneralServiceErrorException("error while deleting time sheets", ex);
             }
 
             _logger.LogInformation("Deleting request...");
 
-            return await _requestsBusinessLayer.DeleteRequest(requestId);
+            await _requestsBusinessLayer.DeleteRequest(requestId);
+
+            _logger.LogInformation("request deleted");
+
+            return requestId;
         }
 
         /// <summary>
-        /// Получить название статуса.
-        /// TODO: Перенести в класс - локализатор
+        /// Обновление статуса заявки. 
+        /// Одновременно, если надо, меняется статус табелей
         /// </summary>
-        private string GetRequestStatusName(RequestStatus status)
+        public async Task UpdateRequestStatusAsync(string requestId, RequestStatus status)
         {
-            switch (status)
+            _logger.LogInformation($"changing request status. request = {requestId} status = {status}");
+
+            Request request = await _requestsBusinessLayer.GetRequest(requestId);
+
+            if (request == null)
             {
-                case RequestStatus.Empty:
-                    return "Не заполнена";
-                case RequestStatus.Creating:
-                    return "Заполнение";
-                case RequestStatus.Created:
-                    return "Заполнена";
-                case RequestStatus.Approving:
-                    return "На проверке";
-                case RequestStatus.Correcting:
-                    return "Содержит ошибки";
-                case RequestStatus.Corrected:
-                    return "Исправлена";
-                case RequestStatus.Approved:
-                    return "Проверена";
-                default:
-                    return "";
+                throw new NotFoundErrorException();
+            }
+
+            var timeSheets = await _timeSheetsBusinessLayer.GetTimeSheetsByRequestId(requestId);
+
+            string timeSheetIds = string.Join(",", timeSheets.Select(t => t.Id));
+
+            _logger.LogInformation($"requests's time-sheet ids: {timeSheetIds}");
+
+            // нельзя менять статус заявки, если есть незаполненные табели
+            if (timeSheets.Where(t => t.Status == TimeSheetStatus.Empty || t.Status == TimeSheetStatus.Creating).Any())
+            {
+                throw new GeneralServiceErrorException($"Can not change status from {request.Status} to {status}");
+            }
+
+            await _requestsBusinessLayer.UpdateRequestStatusAsync(request, status);
+
+            //TODO: переделать на событийную модель (шину)
+            if (status == RequestStatus.Approving)
+            {
+                foreach (var timeSheet in timeSheets.Where(t => t.Status != TimeSheetStatus.Approved))
+                {
+                    await _timeSheetsBusinessLayer.UpdateTimeSheetStatus(timeSheet, TimeSheetStatus.Approving);
+                }
+            }
+
+            _logger.LogInformation($"updating completed");
+        }
+
+        /// <summary>
+        /// Обновление состава заявки (наряд заказов)
+        /// </summary>
+        public async Task<DetailedRequestDto> UpdateRequestAsync(string requestId, IList<string> callOffOrderIds)
+        {
+            Request request = await _requestsBusinessLayer.GetRequest(requestId);
+
+            if (request == null)
+            {
+                throw new NotFoundErrorException();
+            }
+
+            // если есть табели, их надо удалить
+            foreach (var callOffOrderId in callOffOrderIds)
+            {
+                var timeSheet =
+                    await _timeSheetsBusinessLayer.GetTimeSheetByCallOffOrderAndRequest(callOffOrderId, requestId);
+
+                if (timeSheet != null)
+                {
+                    _logger.LogInformation($"timesheet found: {timeSheet.Id} with status {timeSheet.Status}");
+
+                    if (timeSheet.Status != TimeSheetStatus.Empty && timeSheet.Status != TimeSheetStatus.Creating)
+                    {
+                        throw new GeneralServiceErrorException(
+                            $"cannot delete timesheet with status {timeSheet.Status}");
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"deleting timesheet {timeSheet.Id}...");
+                        await _timeSheetsBusinessLayer.DeleteTimeSheet(timeSheet.Id);
+                        _logger.LogInformation("timesheet deleted");
+                    }
+                }
+            }
+
+            request.CallOffOrderIds = callOffOrderIds;
+
+            await _requestsBusinessLayer.UpdateRequest(request);
+
+            return await GetDetailedRequest(request);
+        }
+
+        /// <summary>
+        /// Создать заявку
+        /// </summary>
+        public async Task<DetailedRequestDto> CreateRequestAsync(CreateRequestDto request)
+        {
+            string requestId = null;
+            IEnumerable<string> createdTimeSheetIds = null;
+
+            try
+            {
+                requestId = await _requestsBusinessLayer.CreateRequest(request.ContractId, request.CallOffOrderIds);
+
+                _logger.LogInformation($"request created with id {requestId}");
+
+                createdTimeSheetIds = await CreateTimeSheetsAsync(requestId, request.CallOffOrderIds);
+
+                return await GetDetailedRequest(requestId);
+            }
+            catch (Exception exc)
+            {
+                _logger.LogError("Error while request creating. Deleting request and time sheets");
+
+                if (!string.IsNullOrEmpty(requestId))
+                {
+                    await _requestsBusinessLayer.DeleteRequest(requestId);
+
+                    _logger.LogInformation("request deleted");
+
+                    if (createdTimeSheetIds != null)
+                    {
+                        foreach (var timeSheetId in createdTimeSheetIds)
+                        {
+                            _logger.LogInformation($"deleting time sheet {timeSheetId}");
+
+                            await _timeSheetsBusinessLayer.DeleteTimeSheet(timeSheetId);
+
+                            _logger.LogInformation($"time sheet deleted");
+                        }
+                    }
+                }
+
+                throw exc;
             }
         }
 
         /// <summary>
-        ///  
+        /// Получить детализированную заявку
+        /// </summary>
+        public async Task<DetailedRequestDto> GetRequestAsync(string requestId)
+        {
+            return await GetDetailedRequest(requestId);
+        }
+
+        /// <summary>
+        /// Получить все заявки
+        /// </summary>
+        public async Task<IEnumerable<SimpleRequestDto>> GetRequestsAsync()
+        {
+            var result = await _requestsBusinessLayer.GetRequests();
+
+            return await GetSimpleRequests(result);
+        }
+
+        /// <summary>
+        /// Получить заявки по договору
+        /// </summary>
+        public async Task<IEnumerable<SimpleRequestDto>> GetRequestsByContractAsync(string contractId)
+        {
+            var result = await _requestsBusinessLayer.GetRequestsByContractId(contractId);
+
+            return await GetSimpleRequests(result);
+        }
+
+        /// <summary>
+        ///  Получить табели по заявке и указанным наряд заказам
         /// </summary>
         private async Task<IEnumerable<TimeSheetDto>> GetTimeSheets(IEnumerable<string> callOffOrderIds,
             string requestId)
@@ -104,21 +252,21 @@ namespace Cmas.Services.Requests
             {
                 var callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(callOffOrderId);
 
-                TimeSheet timeSheet = null;
-                try
+                if (callOffOrder == null)
                 {
-                    timeSheet =
-                        await _timeSheetsBusinessLayer.GetTimeSheetByCallOffOrderAndRequest(callOffOrderId, requestId);
-                }
-                catch (NotFoundErrorException exc)
-                {
-                    _logger.Log(LogLevel.Warning, (EventId) 0,
-                        String.Format("Time sheet by call-off order {0} and request {1} not found", callOffOrderId,
-                            requestId), exc,
-                        (state, error) => state.ToString());
+                    _logger.LogWarning($"callOffOrder with id {callOffOrderId} not found");
                     continue;
                 }
 
+                TimeSheet timeSheet =
+                    await _timeSheetsBusinessLayer.GetTimeSheetByCallOffOrderAndRequest(callOffOrderId, requestId);
+
+                if (timeSheet == null)
+                {
+                    _logger.LogWarning(
+                        $"Time sheet by call-off order {callOffOrderId} and request {requestId} not found");
+                    continue;
+                }
 
                 var timeSheetDto = _autoMapper.Map<TimeSheetDto>(timeSheet);
                 timeSheetDto.Assignee = callOffOrder.Assignee;
@@ -133,25 +281,40 @@ namespace Cmas.Services.Requests
             return result;
         }
 
-        public async Task<IEnumerable<string>> CreateTimeSheetsAsync(string requestId,
+        /// <summary>
+        /// Создать табели для заявки
+        /// </summary>
+        /// <param name="requestId">ID заявки</param>
+        /// <param name="callOffOrderIds">ID наряд заказов</param>
+        /// <returns>ID созданных табелей</returns>
+        private async Task<IEnumerable<string>> CreateTimeSheetsAsync(string requestId,
             IEnumerable<string> callOffOrderIds)
         {
             var createdTimeSheets = new List<string>();
 
-            _logger.LogInformation(string.Format("creating time sheets for request with id = {0} call off orders: {1}",
-                requestId, string.Join(",", callOffOrderIds)));
+            string callOffOrderIdsStr = string.Join(",", callOffOrderIds);
+
+            _logger.LogInformation(
+                $"creating time sheets for request with id = {requestId} call off orders: {callOffOrderIdsStr}");
 
             foreach (var callOffOrderId in callOffOrderIds)
             {
-                _logger.LogInformation(string.Format("step 1. call off order = {0}", callOffOrderId));
+                _logger.LogInformation($"step 1. call off order = {callOffOrderId}");
 
                 CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(callOffOrderId);
+
+                if (callOffOrder == null)
+                {
+                    _logger.LogWarning($"call off order {callOffOrderId} not found");
+                    continue;
+                }
+
                 IEnumerable<TimeSheet> timeSheets =
                     await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrderId);
 
                 if (!callOffOrder.StartDate.HasValue || !callOffOrder.FinishDate.HasValue)
                 {
-                    _logger.LogWarning(string.Format("callOffOrder {0} has incorrect period"));
+                    _logger.LogWarning($"callOffOrder {callOffOrderId} has incorrect period");
                     continue;
                 }
 
@@ -161,8 +324,7 @@ namespace Cmas.Services.Requests
                 DateTime finishDate = callOffOrder.FinishDate.Value;
 
 
-                _logger.LogInformation(string.Format("step 2. startDate = {0} finishDate = {1}", startDate.ToString(),
-                    finishDate.ToString()));
+                _logger.LogInformation($"step 2. startDate = {startDate} finishDate = {finishDate}");
 
                 string timeSheetId = null;
                 bool created = false;
@@ -177,15 +339,15 @@ namespace Cmas.Services.Requests
 
                     if (tsExist)
                     {
-                        _logger.LogInformation(string.Format("time sheet found within {0}.{1}. Skipping this month..",
-                            startDate.Month, startDate.Year));
+                        _logger.LogInformation(
+                            $"time sheet found within {startDate.Month}.{startDate.Year}. Skipping this month..");
+
                         startDate = startDate.AddMonths(1);
                         continue;
                     }
                     else
                     {
-                        _logger.LogInformation(string.Format("creating time sheet for period {0}.{1}", startDate.Month,
-                            startDate.Year));
+                        _logger.LogInformation($"creating time sheet for period {startDate.Month}.{startDate.Year}");
 
                         timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
                             startDate.Month, startDate.Year, requestId, callOffOrder.CurrencySysName);
@@ -196,8 +358,8 @@ namespace Cmas.Services.Requests
 
                 if (!created)
                 {
-                    _logger.LogInformation(string.Format("creating time sheet for period {0}.{1}", finishDate.Month,
-                        finishDate.Year));
+                    _logger.LogInformation($"creating time sheet for period {finishDate.Month}.{finishDate.Year}");
+
                     timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
                         finishDate.Month, finishDate.Year, requestId, callOffOrder.CurrencySysName);
                 }
@@ -205,7 +367,7 @@ namespace Cmas.Services.Requests
                 createdTimeSheets.Add(timeSheetId);
             }
 
-            _logger.LogInformation(string.Format("created time sheets: {0}", string.Join(",", createdTimeSheets)));
+            _logger.LogInformation($"created time sheets: {string.Join(",", createdTimeSheets)}");
 
             return createdTimeSheets;
         }
@@ -254,7 +416,7 @@ namespace Cmas.Services.Requests
             }
 
 
-            result.StatusName = GetRequestStatusName(request.Status);
+            result.StatusName = request.Status.GetName();
             result.StatusSysName = request.Status.ToString();
 
             return result;
@@ -279,11 +441,11 @@ namespace Cmas.Services.Requests
                     CurrencySysName = currency,
                     Value = documents.Where(doc => doc.CurrencySysName == currency).Sum(doc => doc.Amount)
                 };
-                
+
                 result.Amounts.Add(amount);
             }
-             
-            result.StatusName = GetRequestStatusName(request.Status);
+
+            result.StatusName = request.Status.GetName();
             result.StatusSysName = request.Status.ToString();
 
             return result;
@@ -312,97 +474,6 @@ namespace Cmas.Services.Requests
             }
 
             return result;
-        }
-
-        /// <summary>
-        /// Обновление статуса заявки. Одновременно, если надо, меняется статус первичной документации
-        /// </summary>
-        public async Task UpdateRequestStatusAsync(string requestId, RequestStatus status)
-        {
-            _logger.LogInformation(string.Format("changing request status. request = {0} status = {1}", requestId,
-                status.ToString()));
-
-            Request request = await _requestsBusinessLayer.GetRequest(requestId);
-
-            var timeSheets = await _timeSheetsBusinessLayer.GetTimeSheetsByRequestId(requestId);
-
-            if (timeSheets.Where(t => t.Status == TimeSheetStatus.Empty || t.Status == TimeSheetStatus.Creating).Any())
-            {
-                throw new GeneralServiceErrorException(
-                    string.Format("Can not change status from {0} to {1}", request.Status, status));
-            }
-
-            await _requestsBusinessLayer.UpdateRequestStatusAsync(request, status);
-
-            //TODO: переделать на событийную модель (шину)
-            if (status == RequestStatus.Approving)
-            {
-                foreach (var timeSheet in timeSheets.Where(t => t.Status != TimeSheetStatus.Approved))
-                {
-                    await _timeSheetsBusinessLayer.UpdateTimeSheetStatus(timeSheet, TimeSheetStatus.Approving);
-                }
-            }
-        }
-
-        public async Task<DetailedRequestDto> UpdateRequestAsync(string requestId, IList<string> callOffOrderIds)
-        {
-            Request request = await _requestsBusinessLayer.GetRequest(requestId);
-
-            request.CallOffOrderIds = callOffOrderIds;
-
-            await _requestsBusinessLayer.UpdateRequest(request);
-
-            return await GetDetailedRequest(request);
-        }
-
-        public async Task<DetailedRequestDto> CreateRequestAsync(CreateRequestDto request)
-        {
-            string requestId = null;
-            IEnumerable<string> createdTimeSheetIds = null;
-            try
-            {
-                requestId = await _requestsBusinessLayer.CreateRequest(request.ContractId,
-                    request.CallOffOrderIds);
-
-                createdTimeSheetIds = await CreateTimeSheetsAsync(requestId, request.CallOffOrderIds);
-                return await GetDetailedRequest(requestId);
-            }
-            catch (Exception exc)
-            {
-                if (!string.IsNullOrEmpty(requestId))
-                {
-                    await _requestsBusinessLayer.DeleteRequest(requestId);
-
-                    if (createdTimeSheetIds != null)
-                    {
-                        foreach (var timeSheetId in createdTimeSheetIds)
-                        {
-                            await _timeSheetsBusinessLayer.DeleteTimeSheet(timeSheetId);
-                        }
-                    }
-                }
-
-                throw exc;
-            }
-        }
-
-        public async Task<DetailedRequestDto> GetRequestAsync(string requestId)
-        {
-            return await GetDetailedRequest(requestId);
-        }
-
-        public async Task<IEnumerable<SimpleRequestDto>> GetRequestsAsync()
-        {
-            var result = await _requestsBusinessLayer.GetRequests();
-
-            return await GetSimpleRequests(result);
-        }
-
-        public async Task<IEnumerable<SimpleRequestDto>> GetRequestsByContractAsync(string contractId)
-        {
-            var result = await _requestsBusinessLayer.GetRequestsByContractId(contractId);
-
-            return await GetSimpleRequests(result);
         }
     }
 }
