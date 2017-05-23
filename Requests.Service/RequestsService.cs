@@ -297,6 +297,7 @@ namespace Cmas.Services.Requests
             _logger.LogInformation(
                 $"creating time sheets for request with id = {requestId} call off orders: {callOffOrderIdsStr}");
 
+            // По каждому наряд заказу создаем табель
             foreach (var callOffOrderId in callOffOrderIds)
             {
                 _logger.LogInformation($"step 1. call off order = {callOffOrderId}");
@@ -308,10 +309,7 @@ namespace Cmas.Services.Requests
                     _logger.LogWarning($"call off order {callOffOrderId} not found");
                     continue;
                 }
-
-                IEnumerable<TimeSheet> timeSheets =
-                    await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrderId);
-
+                 
                 if (!callOffOrder.StartDate.HasValue || !callOffOrder.FinishDate.HasValue)
                 {
                     _logger.LogWarning($"callOffOrder {callOffOrderId} has incorrect period");
@@ -319,50 +317,14 @@ namespace Cmas.Services.Requests
                 }
 
                 DateTime startDate = callOffOrder.StartDate.Value;
-
-                // FIXME: Изменить после преобразования из string в DateTime
                 DateTime finishDate = callOffOrder.FinishDate.Value;
-
-
+                
                 _logger.LogInformation($"step 2. startDate = {startDate} finishDate = {finishDate}");
 
-                string timeSheetId = null;
-                bool created = false;
-                while (startDate < finishDate)
-                {
-                    var tsExist =
-                        timeSheets.Where(
-                                ts =>
-                                    (ts.Month == startDate.Month &&
-                                     ts.Year == startDate.Year))
-                            .Any();
+                // FIXME: Переделать формирование периода по умолчанию для создаваемого табеля
 
-                    if (tsExist)
-                    {
-                        _logger.LogInformation(
-                            $"time sheet found within {startDate.Month}.{startDate.Year}. Skipping this month..");
-
-                        startDate = startDate.AddMonths(1);
-                        continue;
-                    }
-                    else
-                    {
-                        _logger.LogInformation($"creating time sheet for period {startDate.Month}.{startDate.Year}");
-
-                        timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
-                            startDate.Month, startDate.Year, requestId, callOffOrder.CurrencySysName);
-                        created = true;
-                        break;
-                    }
-                }
-
-                if (!created)
-                {
-                    _logger.LogInformation($"creating time sheet for period {finishDate.Month}.{finishDate.Year}");
-
-                    timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
-                        finishDate.Month, finishDate.Year, requestId, callOffOrder.CurrencySysName);
-                }
+                string timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
+                    startDate, startDate.AddMonths(1), requestId, callOffOrder.CurrencySysName);
 
                 createdTimeSheets.Add(timeSheetId);
             }
