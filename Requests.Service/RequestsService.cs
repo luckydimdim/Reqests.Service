@@ -137,7 +137,7 @@ namespace Cmas.Services.Requests
             }
 
             // если есть табели, их надо удалить
-            foreach (var callOffOrderId in callOffOrderIds)
+            foreach (var callOffOrderId in request.CallOffOrderIds)
             {
                 var timeSheet =
                     await _timeSheetsBusinessLayer.GetTimeSheetByCallOffOrderAndRequest(callOffOrderId, requestId);
@@ -159,10 +159,18 @@ namespace Cmas.Services.Requests
                     }
                 }
             }
-
+             
             request.CallOffOrderIds = callOffOrderIds;
 
+            _logger.LogInformation("recreating time sheets...");
+
+            var createdTimeSheetIds = await CreateTimeSheetsAsync(requestId, request.CallOffOrderIds);
+
+            _logger.LogInformation("updating request...");
+
             await _requestsBusinessLayer.UpdateRequest(request);
+
+            _logger.LogInformation("done");
 
             return await GetDetailedRequest(request);
         }
