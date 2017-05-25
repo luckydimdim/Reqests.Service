@@ -49,6 +49,11 @@ namespace Cmas.Services.Requests.Dtos
         public string Id;
 
         /// <summary>
+        /// Счетчик, аналог ID. 
+        /// </summary>
+        public string Counter;
+
+        /// <summary>
         /// Номер ревизии
         /// </summary>
         public string RevId;
