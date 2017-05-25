@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AutoMapper" Version="6.0.1" />
+    <PackageReference Include="AutoMapper" Version="6.0.2" />
     <PackageReference Include="Cmas.BusinessLayers.CallOffOrders" Version="*" />
     <PackageReference Include="Cmas.BusinessLayers.Contracts" Version="*" />
     <PackageReference Include="Cmas.BusinessLayers.TimeSheets" Version="*" />

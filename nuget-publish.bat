@@ -13,4 +13,3 @@ dotnet build %project_name%\%project_name%.csproj --configuration %configuration
 dotnet pack %project_name%\%project_name%.csproj --output %nupkg_out_dir% --include-source --configuration %configuration%
 dotnet nuget push %project_name%\%nupkg_out_dir%\*.nupkg --source %nuget_source%
 
-pause
