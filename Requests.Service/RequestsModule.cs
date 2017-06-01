@@ -36,7 +36,7 @@ namespace Cmas.Services.Requests
         public RequestsModule(IServiceProvider serviceProvider) : base("/requests")
         {
 
-            this.RequiresRoles(new[] { Role.Contractor, Role.Customer });
+            this.RequiresAnyRole(new[] { Role.Contractor, Role.Customer });
 
             _serviceProvider = serviceProvider;
              
