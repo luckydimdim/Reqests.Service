@@ -317,15 +317,9 @@ namespace Cmas.Services.Requests
                     _logger.LogWarning($"call off order {callOffOrderId} not found");
                     continue;
                 }
-                 
-                if (!callOffOrder.StartDate.HasValue || !callOffOrder.FinishDate.HasValue)
-                {
-                    _logger.LogWarning($"callOffOrder {callOffOrderId} has incorrect period");
-                    continue;
-                }
 
-                DateTime startDate = callOffOrder.StartDate.Value;
-                DateTime finishDate = callOffOrder.FinishDate.Value;
+                DateTime startDate = callOffOrder.StartDate;
+                DateTime finishDate = callOffOrder.FinishDate;
                 
                 _logger.LogInformation($"step 2. startDate = {startDate} finishDate = {finishDate}");
 
