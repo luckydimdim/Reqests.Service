@@ -317,16 +317,28 @@ namespace Cmas.Services.Requests
                     _logger.LogWarning($"call off order {callOffOrderId} not found");
                     continue;
                 }
-
-                DateTime startDate = callOffOrder.StartDate;
-                DateTime finishDate = callOffOrder.FinishDate;
                 
-                _logger.LogInformation($"step 2. startDate = {startDate} finishDate = {finishDate}");
+                _logger.LogInformation($"step 2. startDate = {callOffOrder.StartDate} finishDate = {callOffOrder.FinishDate}");
 
                 // FIXME: Переделать формирование периода по умолчанию для создаваемого табеля
 
+                var availableRanges = await _timeSheetsBusinessLayer.GetAvailableRanges(null, callOffOrderId,
+                    callOffOrder.StartDate, callOffOrder.FinishDate);
+
+                var firstRange = availableRanges.FirstOrDefault();
+
+                if (firstRange == null)
+                {
+                    _logger.LogWarning($"no available periods for call off order {callOffOrderId}. Time sheet not created");
+                    continue;
+                }
+
+                DateTime finishDate = firstRange.Min.AddMonths(1);
+                if (finishDate > firstRange.Max)
+                    finishDate = firstRange.Max;
+
                 string timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(callOffOrderId,
-                    startDate, startDate.AddMonths(1), requestId, callOffOrder.CurrencySysName);
+                    firstRange.Min, finishDate, requestId, callOffOrder.CurrencySysName);
 
                 createdTimeSheets.Add(timeSheetId);
             }
