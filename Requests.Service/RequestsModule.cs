@@ -77,6 +77,12 @@ namespace Cmas.Services.Requests
             /// Удалить заявку
             /// </summary>
             Delete<Negotiator>("/{id}", DeleteRequestHandlerAsync);
+
+            /// <summary>
+            /// Проверить сумму по договору
+            /// </summary>
+            Get<CheckAvailableAmountResponse[]>("{requestId}/check-amount", CheckAmountHandlerAsync);
+
         }
 
         #region Обработчики
@@ -84,6 +90,11 @@ namespace Cmas.Services.Requests
         private async Task<IEnumerable<SimpleRequestDto>> GetRequestsHandlerAsync(dynamic args, CancellationToken ct)
         {
             return await _requestsService.GetRequestsAsync();
+        }
+
+        private async Task<CheckAvailableAmountResponse[]> CheckAmountHandlerAsync(dynamic args, CancellationToken ct)
+        {
+            return await _requestsService.CheckAmountAsync((string)args.requestId);
         }
 
         private async Task<IEnumerable<SimpleRequestDto>> GetRequestsByContractHandlerAsync(dynamic args,

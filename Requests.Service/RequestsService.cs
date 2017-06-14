@@ -18,6 +18,7 @@ using Cmas.BusinessLayers.TimeSheets.Entities;
 using Cmas.BusinessLayers.CallOffOrders.Entities;
 using Nancy;
 using Request = Cmas.BusinessLayers.Requests.Entities.Request;
+using Cmas.BusinessLayers.Contracts.Entities;
 
 namespace Cmas.Services.Requests
 {
@@ -450,6 +451,42 @@ namespace Cmas.Services.Requests
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Проверить сумму ппо договору. 
+        /// </summary>
+        public async Task<CheckAvailableAmountResponse[]> CheckAmountAsync(string requestId)
+        {
+            var result = new List<CheckAvailableAmountResponse>();
+
+            Request request = await _requestsBusinessLayer.GetRequest(requestId);
+            Contract contract = await _contractsBusinessLayer.GetContract(request.ContractId);
+
+            var timeSheets = await _timeSheetsBusinessLayer.GetTimeSheetsByRequestId(requestId);
+
+            var currencies = timeSheets.Select(t => t.CurrencySysName).Distinct();
+
+            foreach (var currency in currencies)
+            {
+                var availableAmount = new CheckAvailableAmountResponse();
+
+                availableAmount.CurrencySysName = currency;
+
+                var timeSheetsSum = timeSheets
+                    .Where(t => t.CurrencySysName.Equals(currency, StringComparison.OrdinalIgnoreCase))
+                    .Select(t => t.Amount).Sum();
+
+                var contractCurrAmount = contract.Amounts
+                    .Where(a => a.CurrencySysName.Equals(currency, StringComparison.OrdinalIgnoreCase)).Single().Value;
+
+                availableAmount.Amount = contractCurrAmount - timeSheetsSum;
+
+                result.Add(availableAmount);
+            }
+
+            return result.ToArray();
+
         }
     }
 }
