@@ -19,6 +19,7 @@ using Cmas.BusinessLayers.CallOffOrders.Entities;
 using Nancy;
 using Request = Cmas.BusinessLayers.Requests.Entities.Request;
 using Cmas.BusinessLayers.Contracts.Entities;
+using Cmas.Infrastructure.Security;
 
 namespace Cmas.Services.Requests
 {
@@ -56,25 +57,22 @@ namespace Cmas.Services.Requests
         /// </summary>
         public async Task<string> DeleteRequestAsync(string requestId)
         {
+            var request = await _requestsBusinessLayer.GetRequest(requestId);
+            bool isAdmin = _context.CurrentUser.HasRole(Role.Administrator);
+
+            if (!isAdmin && request.Status == RequestStatus.Approved)
+                throw new ForbiddenErrorException();
+
             // удаляем табели
-            IEnumerable<TimeSheet> timeSheets = await _timeSheetsBusinessLayer.GetTimeSheetsByRequestId(requestId);
+            IEnumerable<string> timeSheetIds = await _timeSheetsBusinessLayer.GetTimeSheetsIdsByRequestId(requestId);
 
-            var timeSheetsIds = string.Join(",", timeSheets.Select(t => t.Id));
-
-            _logger.LogInformation($"deleting time-sheets before request: {timeSheetsIds} ...");
-
-            try
+            _logger.LogInformation($"deleting time-sheets before request: {string.Join(",", timeSheetIds)} ...");
+             
+            foreach (var timeSheetId in timeSheetIds)
             {
-                foreach (var timeSheet in timeSheets)
-                {
-                    await _timeSheetsBusinessLayer.DeleteTimeSheet(timeSheet.Id);
-                }
+                await _timeSheetsBusinessLayer.DeleteTimeSheet(timeSheetId);
             }
-            catch (Exception ex)
-            {
-                throw new GeneralServiceErrorException("error while deleting time sheets", ex);
-            }
-
+            
             _logger.LogInformation("Deleting request...");
 
             await _requestsBusinessLayer.DeleteRequest(requestId);
@@ -160,7 +158,7 @@ namespace Cmas.Services.Requests
                     }
                 }
             }
-             
+
             request.CallOffOrderIds = callOffOrderIds;
 
             _logger.LogInformation("recreating time sheets...");
@@ -318,10 +316,9 @@ namespace Cmas.Services.Requests
                     _logger.LogWarning($"call off order {callOffOrderId} not found");
                     continue;
                 }
-                
-                _logger.LogInformation($"step 2. startDate = {callOffOrder.StartDate} finishDate = {callOffOrder.FinishDate}");
 
-                // FIXME: Переделать формирование периода по умолчанию для создаваемого табеля
+                _logger.LogInformation(
+                    $"step 2. startDate = {callOffOrder.StartDate} finishDate = {callOffOrder.FinishDate}");
 
                 var availableRanges = await _timeSheetsBusinessLayer.GetAvailableRanges(null, callOffOrderId,
                     callOffOrder.StartDate, callOffOrder.FinishDate);
@@ -330,7 +327,8 @@ namespace Cmas.Services.Requests
 
                 if (firstRange == null)
                 {
-                    _logger.LogWarning($"no available periods for call off order {callOffOrderId}. Time sheet not created");
+                    _logger.LogWarning(
+                        $"no available periods for call off order {callOffOrderId}. Time sheet not created");
                     continue;
                 }
 
@@ -402,6 +400,7 @@ namespace Cmas.Services.Requests
         private async Task<SimpleRequestDto> GetSimpleRequest(Request request)
         {
             var result = _autoMapper.Map<SimpleRequestDto>(request);
+            bool isAdmin = _context.CurrentUser.HasRole(Role.Administrator);
 
             var documents = await GetTimeSheets(request.CallOffOrderIds, request.Id);
 
@@ -424,6 +423,12 @@ namespace Cmas.Services.Requests
 
             result.StatusName = request.Status.GetName();
             result.StatusSysName = request.Status.ToString();
+            result.CanDelete = true;
+
+            if (!isAdmin && request.Status == RequestStatus.Approved)
+            {
+                result.CanDelete = false;
+            }
 
             return result;
         }
@@ -486,7 +491,6 @@ namespace Cmas.Services.Requests
             }
 
             return result.ToArray();
-
         }
     }
 }

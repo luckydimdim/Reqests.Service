@@ -63,5 +63,10 @@ namespace Cmas.Services.Requests.Dtos
         /// Системное имя статуса
         /// </summary>
         public string StatusSysName;
+
+        /// <summary>
+        /// Возможность удаления
+        /// </summary>
+        public bool CanDelete;
     }
 }
