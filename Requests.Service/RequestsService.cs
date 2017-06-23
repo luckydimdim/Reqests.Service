@@ -388,6 +388,16 @@ namespace Cmas.Services.Requests
 
                     result.Summary.Vats.Add(vat);
                 }
+                else
+                {
+                    var vat = new AmountDto
+                    {
+                        CurrencySysName = currency,
+                        Value = 0
+                    };
+
+                    result.Summary.Vats.Add(vat);
+                }
             }
 
 
